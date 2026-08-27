@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import functools
 import html
 import re
 import shlex
@@ -76,6 +77,22 @@ def load_cases(suite: Path):
     return cases
 
 
+@functools.lru_cache(maxsize=None)
+def metafile_index(static: Path):
+    """Map lowercased filename -> real path.
+
+    The suite is inconsistent about case: webCGMsuite.xml names every case in
+    upper case, but six metafiles are stored lower case (bigcgm04, edgstl01,
+    polybz01..03). Matching on exact spelling silently loses those on a
+    case-sensitive filesystem, so index the directory once instead.
+    """
+    index = {}
+    for pattern in ("*.cgm", "*.CGM"):
+        for path in static.glob(pattern):
+            index.setdefault(path.name.lower(), path)
+    return index
+
+
 def svg_text(svg: Path) -> str:
     try:
         raw = svg.read_text(encoding="utf-8", errors="replace")
@@ -86,11 +103,7 @@ def svg_text(svg: Path) -> str:
 
 def evaluate(case, cli: Path, suite: Path, profile: str, workdir: Path):
     static = suite / "static10"
-    cgm = None
-    for cand in (case["name"] + ".cgm", case["name"] + ".CGM"):
-        if (static / cand).is_file():
-            cgm = static / cand
-            break
+    cgm = metafile_index(static).get((case["name"] + ".cgm").lower())
 
     results = []
     if cgm is None:
@@ -317,6 +330,7 @@ def main() -> int:
         "| &nbsp;&nbsp;passed | **{}** |".format(passed),
         "| &nbsp;&nbsp;failed | **{}** |".format(failed),
         "| require an operator | {} ({:.0f}%) |".format(operator, pct(operator)),
+        "| not evaluated (metafile absent) | {} |".format(tally["n/a"]),
         "",
         "## By CGM category",
         "",
@@ -364,6 +378,11 @@ def main() -> int:
     args.out.write_text("\n".join(lines), encoding="utf-8")
     print("mechanical: {} passed, {} failed; {} need an operator".format(
         passed, failed, operator))
+    if tally["n/a"]:
+        missing = sorted({r["case"]["name"] for r in rows
+                          for res in r["results"] if res["verdict"] == "n/a"})
+        print("WARNING: {} checkpoints not evaluated, metafile missing for: {}"
+              .format(tally["n/a"], ", ".join(missing)))
     print("wrote {}".format(args.out))
 
     if args.worksheet:

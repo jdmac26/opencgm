@@ -26,6 +26,7 @@ Profile: `webcgm`. Test cases: **232**.
 | &nbsp;&nbsp;passed | **438** |
 | &nbsp;&nbsp;failed | **0** |
 | require an operator | 474 (52%) |
+| not evaluated (metafile absent) | 0 |
 
 ## By CGM category
 
