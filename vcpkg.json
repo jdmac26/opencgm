@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "cgm-engine",
+  "version": "1.4.0",
+  "description": "CGM parser and rendering engine with native Skia support",
+  "dependencies": [
+    {
+      "name": "skia",
+      "features": ["gl"]
+    }
+  ]
+}

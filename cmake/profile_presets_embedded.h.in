@@ -1,0 +1,13 @@
+// Auto-generated from engine/config/profile-presets.json by CMake.
+// DO NOT EDIT — change the JSON file instead; it is the single source of
+// truth for the built-in conversion profile catalog.
+#ifndef OPENCGM_PROFILE_PRESETS_EMBEDDED_H
+#define OPENCGM_PROFILE_PRESETS_EMBEDDED_H
+
+namespace opencgm::generated
+{
+    inline constexpr const char* kBuiltInProfileCatalogJson =
+        R"opencgm_presets(@OPENCGM_PROFILE_PRESETS_JSON@)opencgm_presets";
+}
+
+#endif

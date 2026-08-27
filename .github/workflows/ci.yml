@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      # Runs without any sample corpus. Tests that need one skip.
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+  conformance:
+    name: WebCGM 2.1 corpus
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      # Downloads the WebCGM 2.1 Conformance Test Suite from OASIS against a
+      # pinned checksum. The S1000D corpus is portal-gated and stays skipped.
+      - name: Fetch test corpus
+        run: python scripts/fetch-testdata.py
+
+      - name: Test against corpus
+        env:
+          OPENCGM_SAMPLES_DIR: ${{ github.workspace }}/testdata
+        run: ctest --test-dir build --build-config Release --output-on-failure

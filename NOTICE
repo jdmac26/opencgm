@@ -1,0 +1,36 @@
+OpenCGM
+Copyright 2025-2026 Reforge Software
+
+This product includes software developed by Reforge Software.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+------------------------------------------------------------------------
+
+This product is a C++ port of the codessentials.CGM library.
+
+    codessentials.CGM
+    https://github.com/twenzel/CGM
+    Copyright (c) 2019 Toni Wenzel
+    Licensed under the MIT License.
+
+This product bundles the following components:
+
+    miniz 3.1.0 - public domain / Unlicense - Rich Geldreich
+    nlohmann/json - MIT - Copyright (c) 2013-2023 Niels Lohmann
+    stb_truetype v1.26 - public domain / MIT - Sean Barrett
+
+This product optionally depends on Skia (BSD-3-Clause, Copyright (c) Google
+LLC), consumed as a build dependency.
+
+Full license texts and additional notices are in THIRD-PARTY-NOTICES.md.

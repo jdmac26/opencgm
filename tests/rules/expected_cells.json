@@ -1,0 +1,418 @@
+{
+  "_comment": "Per-profile expected-cell rules for the compliance matrix. Revised 2026-07-21: taxonomy matches the shipping 5-profile catalog plus the S1000DLegacy attribute style; Default/HighQualityPrint (retired presets) removed. Emission verified against attribute_manager.cpp tiers after the emission-gate decoupling: hotspot encoding no longer suppresses preserved APS metadata. Spec anchors verified against S1000D Issue 6 Chap 7.3.2 and iSpec 2200 Ch 5-2-4.",
+  "_attribute_keys": [
+    "apsid",
+    "apsname",
+    "aps_type",
+    "linkuri",
+    "linktitle",
+    "region",
+    "screentip",
+    "viewcontext",
+    "layer"
+  ],
+  "profiles": {
+    "S1000D": {
+      "spec_section": "S1000D Issue 6 Chap 7.3.2 Table 11 (verified 2026-07-21)",
+      "output_profile": "S1000D Issue 6 SVG profile",
+      "attributes": {
+        "apsid": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-apsid"
+          ],
+          "notes": "Table 11",
+          "required_on": "every grobject"
+        },
+        "apsname": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-apsname"
+          ],
+          "notes": "Table 11"
+        },
+        "aps_type": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-type"
+          ]
+        },
+        "linkuri": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:linkuri"
+          ]
+        },
+        "linktitle": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-linktitle"
+          ]
+        },
+        "region": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:region"
+          ]
+        },
+        "screentip": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:screentip"
+          ]
+        },
+        "viewcontext": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:viewcontext"
+          ]
+        },
+        "layer": {
+          "enabled": false,
+          "reason": "S1000D preset disables layer APS (no S1000D layer attribute)"
+        }
+      }
+    },
+    "S1000DLegacy": {
+      "spec_section": "Pre-Issue-6: no normative SVG markup; viewer-convention superset (RWS LiveContent matches bare apsname + id)",
+      "output_profile": "S1000D legacy (bare-attribute superset)",
+      "attributes": {
+        "apsid": {
+          "enabled": true,
+          "svg_attrs": [
+            "apsid"
+          ],
+          "notes": "bare apsid (historic OpenCGM output)",
+          "required_on": "every grobject"
+        },
+        "apsname": {
+          "enabled": true,
+          "svg_attrs": [
+            "name",
+            "apsname"
+          ],
+          "notes": "superset: name (historic) + apsname (RWS convention)"
+        },
+        "aps_type": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-type"
+          ]
+        },
+        "linkuri": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:linkuri"
+          ]
+        },
+        "linktitle": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-linktitle"
+          ]
+        },
+        "region": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:region"
+          ]
+        },
+        "screentip": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:screentip"
+          ]
+        },
+        "viewcontext": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:viewcontext"
+          ]
+        },
+        "layer": {
+          "enabled": false,
+          "reason": "S1000D preset disables layer APS"
+        }
+      }
+    },
+    "AtaISpec2200": {
+      "spec_section": "iSpec 2200 Ch 5-2-4 (GREXCHANGE V2.13) 7.4.3.1 (verified 2026-07-21)",
+      "output_profile": "ATA SVG profile (same data-apsid/data-apsname as S1000D Issue 6)",
+      "attributes": {
+        "apsid": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-apsid"
+          ],
+          "notes": "7.4.3.1",
+          "required_on": "every grobject"
+        },
+        "apsname": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-apsname"
+          ],
+          "notes": "7.4.3.1"
+        },
+        "aps_type": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-type"
+          ]
+        },
+        "linkuri": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:linkuri"
+          ]
+        },
+        "linktitle": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-linktitle"
+          ]
+        },
+        "region": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:region"
+          ]
+        },
+        "screentip": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:screentip"
+          ]
+        },
+        "viewcontext": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:viewcontext"
+          ]
+        },
+        "layer": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-layer"
+          ]
+        }
+      }
+    },
+    "WebCGM21": {
+      "spec_section": "WebCGM 2.1 (no official APS-to-SVG mapping; webcgm:*/data-aps-* is a documented convention)",
+      "output_profile": "WebCGM dialect (anchor/title link wrapping + preserved APS metadata)",
+      "attributes": {
+        "apsid": {
+          "enabled": true,
+          "svg_attrs": [
+            "id"
+          ],
+          "notes": "APS id carried by the SVG id attribute"
+        },
+        "apsname": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:name"
+          ]
+        },
+        "aps_type": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-type"
+          ]
+        },
+        "linkuri": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:linkuri"
+          ]
+        },
+        "linktitle": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-linktitle"
+          ]
+        },
+        "region": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:region"
+          ]
+        },
+        "screentip": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:screentip"
+          ]
+        },
+        "viewcontext": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:viewcontext"
+          ]
+        },
+        "layer": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-layer"
+          ]
+        }
+      }
+    },
+    "CALS": {
+      "spec_section": "MIL-D-28003A (v1: no APS possible) / MIL-PRF-28003B (WebCGM-era APS legitimate)",
+      "output_profile": "WebCGM dialect; APS preserved when present",
+      "attributes": {
+        "apsid": {
+          "enabled": true,
+          "svg_attrs": [
+            "id"
+          ],
+          "notes": "APS id carried by the SVG id attribute"
+        },
+        "apsname": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:name"
+          ],
+          "notes": "true v1 sources simply have no APS - cells apply only when input carries APS"
+        },
+        "aps_type": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-type"
+          ]
+        },
+        "linkuri": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:linkuri"
+          ]
+        },
+        "linktitle": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-linktitle"
+          ]
+        },
+        "region": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:region"
+          ]
+        },
+        "screentip": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:screentip"
+          ]
+        },
+        "viewcontext": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:viewcontext"
+          ]
+        },
+        "layer": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-layer"
+          ]
+        }
+      }
+    },
+    "PIP": {
+      "spec_section": "POSC CGM*PIP (CGM v3, static): any APS is nonconformant input, carried via the WebCGM-borrowed convention",
+      "output_profile": "WebCGM dialect",
+      "attributes": {
+        "apsid": {
+          "enabled": true,
+          "svg_attrs": [
+            "id"
+          ],
+          "notes": "APS id carried by the SVG id attribute"
+        },
+        "apsname": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:name"
+          ]
+        },
+        "aps_type": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-type"
+          ]
+        },
+        "linkuri": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:linkuri"
+          ]
+        },
+        "linktitle": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-aps-linktitle"
+          ]
+        },
+        "region": {
+          "enabled": false,
+          "reason": "preset uses BboxOnly region handling; no overlay/region attribute"
+        },
+        "screentip": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:screentip"
+          ]
+        },
+        "viewcontext": {
+          "enabled": true,
+          "svg_attrs": [
+            "webcgm:viewcontext"
+          ]
+        },
+        "layer": {
+          "enabled": true,
+          "svg_attrs": [
+            "data-layer"
+          ]
+        }
+      }
+    }
+  },
+  "region_shapes": {
+    "_comment": "Workstream E expected SVG element per CGM region source primitive. Only applies when profile enables region preservation.",
+    "rectangle": {
+      "svg_element": "rect",
+      "required_attrs": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ]
+    },
+    "ellipse": {
+      "svg_element": "ellipse",
+      "required_attrs": [
+        "cx",
+        "cy",
+        "rx",
+        "ry"
+      ]
+    },
+    "polygon": {
+      "svg_element": "polygon",
+      "required_attrs": [
+        "points"
+      ]
+    },
+    "polybezier": {
+      "svg_element": "path",
+      "required_attrs": [
+        "d"
+      ],
+      "d_pattern": "C"
+    }
+  }
+}

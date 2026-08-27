@@ -1,0 +1,26 @@
+# Build output
+build/
+build_*/
+out/
+cmake-build-*/
+
+# Test corpora — fetched by scripts/fetch-testdata.py, never committed.
+# Both are third-party data under their own terms; see THIRD-PARTY-NOTICES.md.
+testdata/
+
+# vcpkg
+vcpkg_installed/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc

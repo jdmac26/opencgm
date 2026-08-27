@@ -1,0 +1,132 @@
+# OpenCGM
+
+**An open-source CGM (Computer Graphics Metafile) parser and CGM→SVG converter.**
+
+CGM is the vector format that aerospace, defence, and automotive technical
+publications have standardised on for three decades — it is what S1000D and ATA
+iSpec 2200 illustrations are authored in. The open-source tooling for it has not
+kept up: RALCGM is unmaintained, and ImageMagick and Inkscape have effectively no
+usable CGM support.
+
+OpenCGM is a modern, actively developed implementation: a complete
+ISO/IEC 8632 parser, a Skia-backed renderer, and an SVG emitter with profile
+support for WebCGM 2.1 and S1000D.
+
+- Parses CGM binary and clear-text encodings per **ISO/IEC 8632-3:1999** and
+  **ISO/IEC 8632-4:1999**
+- Converts CGM to SVG with **WebCGM 2.1** and **S1000D** output profiles
+- Preserves application structure (APS) — layers, names, screentips, link URIs,
+  and region hotspots survive the conversion
+- Handles the parts that usually break: NURBS approximation, cell arrays, tile
+  rasters (JPEG / PNG / bitmap / CCITT G4), pattern and hatch geometry, and font
+  substitution with ACI font normalisation
+- Ships a C API for embedding, a CLI, and a validation tool
+- Round-trips CGM → CGM as well as converting
+
+## Building
+
+Requires CMake 3.15+, a C++17 compiler, and optionally
+[Skia](https://skia.org) for the native renderer (consumed via vcpkg; see
+`vcpkg.json`, and configure with `-DENABLE_SKIA_RENDERER=ON`).
+
+```bash
+cmake -B build
+cmake --build build
+```
+
+Binaries land in `build/bin`: `opencgm_cli`, `cgm_validate`, and the
+`opencgm` shared library.
+
+## Usage
+
+### Command line
+
+```bash
+opencgm_cli --profile s1000d input.cgm output.svg
+```
+
+Common options:
+
+- `--profile <s1000d|webcgm|compat>` — output profile (`s1000d` is the default)
+- `--font-map <file>` — JSON font map describing CGM font substitutions and
+  optional embedded WOFF2 resources
+- `--text-as-path` / `--text-as-path-threshold <value>` — outline text for
+  pixel-exact verification
+- `--validate-geometry` — enforce viewBox/viewcontext consistency; tune with
+  `--geometry-tolerance <value>` (default: 0.01 user units)
+- `--geometry-log` / `--raster-log` — emit diagnostics to stderr
+
+`opencgm_cli --help` lists every flag.
+
+### Library
+
+```cpp
+#include <opencgm/cgm_file.h>
+
+auto cgmFile = cgm::BinaryCGMFile("input.cgm");
+
+for (const auto& command : cgmFile.getCommands()) {
+    // inspect or transform
+}
+
+cgmFile.writeFile("output.cgm");
+```
+
+A stable C API is available in `include/opencgm/c_api.h` for binding from other
+languages.
+
+## Layout
+
+| Path | Contents |
+| --- | --- |
+| `src/core/`, `src/classes/` | CGM file handling and data structures |
+| `src/commands/` | CGM command implementations |
+| `src/import/`, `src/export/` | Binary and clear-text parsing and writing |
+| `src/svg/` | SVG emission and profile handling |
+| `src/skia/` | Skia renderer |
+| `src/nurbs/`, `src/xcf/` | NURBS approximation, XCF support |
+| `src/validation/` | Profile and geometry validation |
+| `include/opencgm/` | Public headers and C API |
+| `tests/` | Unit tests and the WebCGM 2.1 conformance harness |
+
+## Tests
+
+```bash
+cmake -B build -DBUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build
+```
+
+That runs green on a fresh clone. Sample corpora are **not vendored** — the
+WebCGM 2.1 Conformance Test Suite and the S1000D Bike Data Set are third-party
+data under their own terms — so tests needing a corpus skip until you fetch one:
+
+```bash
+python scripts/fetch-testdata.py
+export OPENCGM_SAMPLES_DIR=$PWD/testdata
+```
+
+The WebCGM suite downloads automatically from OASIS with a pinned checksum and
+activates 78 further tests. The S1000D Bike Data Set is distributed through the
+S1000D users' portal and must be installed by hand; the script prints
+instructions.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The most useful contributions are
+usually narrow: a CGM file that renders wrong, plus a test pinning the correct
+behaviour.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
+
+OpenCGM is a C++ port of the [codessentials.CGM](https://github.com/twenzel/CGM)
+C# library by Toni Wenzel, used under the MIT License. See [NOTICE](NOTICE) and
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for full attribution.
+
+## Commercial
+
+**Reforge**, a commercial desktop application built on this engine — batch
+conversion, folder monitoring, a validation UI, and hotspot export — is
+available separately. OpenCGM itself is and remains Apache-2.0.

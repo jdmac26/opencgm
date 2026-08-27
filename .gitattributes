@@ -1,0 +1,11 @@
+# Normalise line endings. Without this, a Windows clone commits CRLF and the
+# Linux CI job fails on shell scripts.
+* text=auto eol=lf
+
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+*.png  binary
+*.jpg  binary
+*.cgm  binary
+*.ttf  binary

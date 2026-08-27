@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "name": "webcgm20-metafile-report",
+      "corpus": "webcgm20",
+      "relativeInputPath": "webcgm21-ts/20tests/CGM_Metafile.cgm",
+      "expectedDetectionProfile": "webcgm-2.1",
+      "expectedSvgFragments": [
+        "<svg",
+        "</svg>",
+        "xmlns="
+      ],
+      "expectedReportTextFragments": [
+        "Conversion Report",
+        "Scene nodes:",
+        "Preserved:"
+      ],
+      "minimumSummary": {
+        "pictures": 1,
+        "sceneNodes": 1
+      },
+      "expectedOutput": {
+        "minified": true,
+        "optimizedPaths": true
+      }
+    },
+    {
+      "name": "webcgm20-nurbs-geometry",
+      "corpus": "webcgm20",
+      "relativeInputPath": "webcgm21-ts/20tests/NURBS01.cgm",
+      "expectedDetectionProfile": "webcgm-2.1",
+      "expectedSvgFragments": [
+        "<svg",
+        "<path"
+      ],
+      "expectedReportTextFragments": [
+        "Conversion Report",
+        "Geometry"
+      ],
+      "minimumSummary": {
+        "pictures": 1,
+        "geometryNodes": 1
+      },
+      "expectedOutput": {
+        "minified": true,
+        "optimizedPaths": true
+      }
+    },
+    {
+      "name": "webcgm21-first-corpus-file",
+      "corpus": "webcgm21",
+      "relativeInputDirectory": "webcgm21-ts/21tests",
+      "filePattern": ".*\\.cgm",
+      "expectedDetectionProfile": "webcgm-2.1",
+      "expectedSvgFragments": [
+        "<svg",
+        "</svg>"
+      ],
+      "expectedReportTextFragments": [
+        "Conversion Report",
+        "Pictures:"
+      ],
+      "minimumSummary": {
+        "pictures": 1,
+        "sceneNodes": 1
+      },
+      "expectedOutput": {
+        "minified": true,
+        "optimizedPaths": true
+      }
+    },
+    {
+      "name": "static10-cell-array-raster",
+      "corpus": "static10",
+      "relativeInputPath": "webcgm21-ts/static10/CELARY01.cgm",
+      "expectedSvgFragments": [
+        "<svg",
+        "<image"
+      ],
+      "expectedReportTextFragments": [
+        "Conversion Report",
+        "Summary"
+      ],
+      "minimumSummary": {
+        "pictures": 1,
+        "rasterNodes": 1
+      },
+      "expectedOutput": {
+        "minified": true,
+        "optimizedPaths": true
+      }
+    },
+    {
+      "name": "ata-grexchange-allelm",
+      "corpus": "ata30",
+      "relativeInputPath": "ata30-cgms/allelm01.cgm",
+      "expectedDetectionProfile": "ata-grexchange-2.9",
+      "expectedSvgFragments": [
+        "<svg",
+        "</svg>",
+        "xmlns:webcgm=\"http://www.w3.org/Graphics/WebCGM\""
+      ],
+      "expectedReportTextFragments": [
+        "Conversion Report",
+        "Pictures:"
+      ],
+      "minimumSummary": {
+        "pictures": 1
+      },
+      "expectedOutput": {
+        "minified": true,
+        "optimizedPaths": true
+      }
+    },
+    {
+      "name": "ata-grexchange-arctst",
+      "corpus": "ata30",
+      "relativeInputPath": "ata30-cgms/arctst01.cgm",
+      "expectedDetectionProfile": "ata-grexchange-2.9",
+      "expectedSvgFragments": [
+        "<svg",
+        "</svg>",
+        "xmlns:webcgm=\"http://www.w3.org/Graphics/WebCGM\""
+      ],
+      "expectedReportTextFragments": [
+        "Conversion Report"
+      ],
+      "minimumSummary": {
+        "pictures": 1
+      },
+      "expectedOutput": {
+        "minified": true,
+        "optimizedPaths": true
+      }
+    }
+  ]
+}
