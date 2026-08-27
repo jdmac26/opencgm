@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
 import collections
 import functools
 import html
@@ -158,79 +159,243 @@ def evaluate(case, cli: Path, suite: Path, profile: str, workdir: Path):
     return results, (svg if converted else None)
 
 
-def build_worksheet(dest: Path, suite: Path, rows):
+def _data_uri(path: Path) -> str:
+    return "data:image/png;base64," + base64.b64encode(
+        path.read_bytes()).decode("ascii")
+
+
+WORKSHEET_CSS = """
+:root{--bg:#fff;--fg:#111;--muted:#5a5a5a;--line:#d8d8d8;--card:#fff;
+      --pass:#137333;--fail:#c5221f;--accent:#1a56db}
+@media (prefers-color-scheme:dark){:root{--bg:#16181c;--fg:#e8e8e8;
+      --muted:#a0a0a0;--line:#333;--card:#1e2126;--pass:#5bb974;--fail:#f28b82;
+      --accent:#8ab4f8}}
+*{box-sizing:border-box}
+body{font:14px/1.55 system-ui,-apple-system,sans-serif;margin:0;
+     background:var(--bg);color:var(--fg)}
+header{position:sticky;top:0;z-index:10;background:var(--card);
+       border-bottom:1px solid var(--line);padding:.7rem 1.25rem;
+       display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+header h1{font-size:1rem;margin:0 .75rem 0 0}
+.progress{font-variant-numeric:tabular-nums;color:var(--muted)}
+.bar{height:6px;background:var(--line);border-radius:3px;width:170px;
+     overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);width:0}
+main{padding:1.25rem;max-width:1180px;margin:0 auto}
+h2{margin:2.25rem 0 .75rem;border-bottom:2px solid var(--line);
+   padding-bottom:.3rem;font-size:1.05rem}
+.case{border:1px solid var(--line);border-radius:8px;padding:1rem;
+      margin:1rem 0;background:var(--card)}
+.case h3{margin:0 0 .25rem;font-size:1rem}
+.purpose{color:var(--muted);font-style:italic;margin:.25rem 0 .75rem}
+.pair{display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-start}
+.pair figure{margin:0}
+.pair img{width:400px;max-width:100%;border:1px solid var(--line);
+          background:#fff;display:block}
+figcaption{font-size:12px;color:var(--muted);padding-top:.25rem}
+.pair.stack{position:relative;width:400px;max-width:100%}
+.pair.stack figure{position:absolute;inset:0;margin:0}
+.pair.stack figure:first-child{position:relative}
+.pair.stack figcaption{display:none}
+ol{margin:.75rem 0 0;padding-left:1.4rem}
+li{margin:.3rem 0}
+li.auto-pass{color:var(--pass)}
+li.auto-fail{color:var(--fail);font-weight:600}
+.ctl{margin-left:.5rem;white-space:nowrap}
+.ctl button{font:inherit;font-size:12px;border:1px solid var(--line);
+   background:transparent;color:var(--fg);border-radius:4px;padding:1px 7px;
+   cursor:pointer;margin-right:2px}
+.ctl button[aria-pressed=true][data-v=pass]{background:var(--pass);
+   border-color:var(--pass);color:#fff}
+.ctl button[aria-pressed=true][data-v=fail]{background:var(--fail);
+   border-color:var(--fail);color:#fff}
+button.plain{font:inherit;border:1px solid var(--line);background:transparent;
+   color:var(--fg);border-radius:5px;padding:3px 10px;cursor:pointer}
+.hide{display:none}
+textarea{width:100%;height:150px;font:12px/1.4 ui-monospace,monospace;
+   background:var(--bg);color:var(--fg);border:1px solid var(--line);
+   border-radius:6px;padding:.5rem;margin-bottom:1rem}
+.note{color:var(--muted);font-size:13px}
+"""
+
+WORKSHEET_JS = """
+const KEY='opencgm-static10-verdicts';
+let V={};
+try{V=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){V={}}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(V))}catch(e){}};
+const ctls=[...document.querySelectorAll('.ctl')];
+const total=ctls.length;
+
+function applyFilter(){
+  const f=document.getElementById('filter').value;
+  document.querySelectorAll('.case').forEach(card=>{
+    const cs=[...card.querySelectorAll('.ctl')];
+    let show=true;
+    if(f==='todo') show=cs.some(c=>!V[c.dataset.id]);
+    else if(f==='fail') show=cs.some(c=>V[c.dataset.id]==='fail');
+    card.classList.toggle('hide',!show);
+  });
+  document.querySelectorAll('h2').forEach(h=>{
+    let n=h.nextElementSibling, any=false;
+    while(n && n.tagName!=='H2'){
+      if(n.classList.contains('case') && !n.classList.contains('hide')) any=true;
+      n=n.nextElementSibling;
+    }
+    h.classList.toggle('hide',!any);
+  });
+}
+
+function refresh(){
+  let n=0;
+  ctls.forEach(c=>{
+    const v=V[c.dataset.id];
+    if(v)n++;
+    c.querySelectorAll('button').forEach(b=>
+      b.setAttribute('aria-pressed', String(b.dataset.v===v)));
+  });
+  document.getElementById('count').textContent=n+' / '+total+' adjudicated';
+  document.getElementById('barfill').style.width=(total?100*n/total:0)+'%';
+  applyFilter();
+}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('.ctl button'); if(!b)return;
+  const id=b.parentElement.dataset.id;
+  if(V[id]===b.dataset.v){delete V[id];}else{V[id]=b.dataset.v;}
+  save(); refresh();
+});
+document.getElementById('filter').addEventListener('change',applyFilter);
+document.getElementById('overlay').addEventListener('change',e=>{
+  document.querySelectorAll('.pair').forEach(p=>
+    p.classList.toggle('stack',e.target.checked));
+  document.getElementById('mixwrap').classList.toggle('hide',!e.target.checked);
+});
+document.getElementById('mix').addEventListener('input',e=>{
+  document.querySelectorAll('.pair figure:last-child img').forEach(i=>
+    i.style.opacity=e.target.value);
+});
+document.getElementById('export').addEventListener('click',()=>{
+  const rows=ctls.map(c=>({test:c.dataset.test,checkpoint:c.dataset.cp,
+    verdict:V[c.dataset.id]||'unadjudicated'}));
+  const t=document.getElementById('out');
+  t.classList.remove('hide');
+  t.value=JSON.stringify(rows,null,2);
+  t.focus(); t.select();
+});
+document.getElementById('reset').addEventListener('click',()=>{
+  if(confirm('Discard all recorded verdicts?')){V={};save();refresh();}
+});
+refresh();
+"""
+
+
+def build_worksheet(dest: Path, suite: Path, rows, embed: bool = False):
+    """Emit an operator worksheet for the checkpoints needing human judgement.
+
+    Each case shows the suite's reference image beside this converter's
+    rendering of the same metafile. Checkpoints already decided mechanically
+    are marked; the rest get pass/fail controls whose verdicts persist in the
+    browser, so a session survives a reload and can be exported as JSON.
+    """
     dest.mkdir(parents=True, exist_ok=True)
-    (dest / "render").mkdir(exist_ok=True)
+    render_dir = dest / "render"
+    render_dir.mkdir(exist_ok=True)
     refs = dest / "reference"
     refs.mkdir(exist_ok=True)
 
-    css = (
-        "body{font:14px/1.5 system-ui,sans-serif;margin:2rem;max-width:1100px}"
-        "h2{margin-top:2.5rem;border-bottom:2px solid #ccc;padding-bottom:.3rem}"
-        ".case{border:1px solid #ddd;border-radius:6px;padding:1rem;margin:1rem 0}"
-        ".imgs{display:flex;gap:1rem;flex-wrap:wrap}"
-        ".imgs figure{margin:0}"
-        ".imgs img{max-width:420px;border:1px solid #bbb;background:#fff}"
-        "figcaption{font-size:12px;color:#555}"
-        "li.auto-pass{color:#137333}"
-        "li.auto-fail{color:#c5221f;font-weight:600}"
-        ".purpose{color:#444;font-style:italic}"
-    )
-
-    parts = ["<!doctype html><html><head><meta charset='utf-8'>",
-             "<title>WebCGM static10 operator worksheet</title>",
-             "<style>" + css + "</style></head><body>",
-             "<h1>WebCGM static10 &mdash; operator worksheet</h1>",
-             "<p>Checkpoints marked <b>operator</b> need visual adjudication "
-             "against the reference image. Mechanically decided checkpoints "
-             "are green (pass) or red (fail).</p>"]
+    marks = {"pass": "&#10003;", "fail": "&#10007;", "n/a": "&mdash;"}
+    parts = [
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'>",
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>",
+        "<title>OpenCGM - WebCGM static10 operator worksheet</title>",
+        "<style>" + WORKSHEET_CSS + "</style></head><body>",
+        "<header><h1>WebCGM static10 &mdash; operator worksheet</h1>",
+        "<span class='progress' id='count'>0 / 0</span>",
+        "<span class='bar'><i id='barfill'></i></span>",
+        "<label>Show <select id='filter'>",
+        "<option value='all'>all cases</option>",
+        "<option value='todo'>unadjudicated</option>",
+        "<option value='fail'>marked failing</option></select></label>",
+        "<label><input type='checkbox' id='overlay'> overlay</label>",
+        "<span id='mixwrap' class='hide'>blend "
+        "<input type='range' id='mix' min='0' max='1' step='0.05' value='0.5'>"
+        "</span>",
+        "<button class='plain' id='export'>Export JSON</button>",
+        "<button class='plain' id='reset'>Reset</button>",
+        "</header><main>",
+        "<p class='note'>Left is the suite's reference image; right is this "
+        "converter's rendering of the same metafile. Tick <b>overlay</b> to "
+        "stack them and use the blend slider to spot differences. Checkpoints "
+        "already decided mechanically are marked. Verdicts you record are kept "
+        "in this browser and survive a reload.</p>",
+        "<textarea id='out' class='hide' readonly></textarea>",
+    ]
 
     by_cat = collections.defaultdict(list)
     for r in rows:
         by_cat[r["case"]["category"]].append(r)
 
-    marks = {"pass": "&#10003; auto", "fail": "&#10007; auto",
-             "operator": "&#9744; operator", "n/a": "&mdash; n/a"}
-
     for cat in sorted(by_cat):
         parts.append("<h2>" + html.escape(cat) + "</h2>")
         for r in by_cat[cat]:
             case = r["case"]
-            parts.append("<div class='case'><h3>"
-                         + html.escape(case["name"]) + "</h3>")
+            name = case["name"]
+            parts.append("<div class='case'><h3>" + html.escape(name) + "</h3>")
             if case["purpose"]:
                 parts.append("<p class='purpose'>"
                              + html.escape(case["purpose"]) + "</p>")
 
-            imgs = []
-            ref_src = suite / "static10" / "images" / (case["name"] + ".png")
+            ref_src = suite / "static10" / "images" / (name + ".png")
+            png = render_dir / (name + ".png")
+            ref_uri = None
+            out_uri = None
             if ref_src.is_file():
-                shutil.copyfile(ref_src, refs / ref_src.name)
-                imgs.append(("reference/" + ref_src.name, "reference"))
-            png = dest / "render" / (case["name"] + ".png")
+                if embed:
+                    ref_uri = _data_uri(ref_src)
+                else:
+                    shutil.copyfile(ref_src, refs / ref_src.name)
+                    ref_uri = "reference/" + ref_src.name
             if png.is_file():
-                imgs.append(("render/" + png.name, "opencgm"))
-            if imgs:
-                parts.append("<div class='imgs'>")
-                for src, cap in imgs:
-                    parts.append("<figure><img src='" + src + "' alt='" + cap
-                                 + "'><figcaption>" + cap
-                                 + "</figcaption></figure>")
+                out_uri = _data_uri(png) if embed else "render/" + png.name
+
+            if ref_uri or out_uri:
+                parts.append("<div class='pair'>")
+                if ref_uri:
+                    parts.append("<figure><img src='" + ref_uri
+                                 + "' alt='reference rendering'>"
+                                 "<figcaption>reference (suite)</figcaption>"
+                                 "</figure>")
+                if out_uri:
+                    parts.append("<figure><img src='" + out_uri
+                                 + "' alt='OpenCGM rendering'>"
+                                 "<figcaption>OpenCGM</figcaption></figure>")
                 parts.append("</div>")
 
             parts.append("<ol>")
-            for res in r["results"]:
-                cls = {"pass": "auto-pass", "fail": "auto-fail"}.get(
-                    res["verdict"], "operator")
-                extra = ""
-                if res["detail"]:
-                    extra = " <em>" + html.escape(res["detail"]) + "</em>"
-                parts.append("<li class='" + cls + "'>["
-                             + marks[res["verdict"]] + "] "
-                             + html.escape(res["text"]) + extra + "</li>")
+            for idx, res in enumerate(r["results"]):
+                text = html.escape(res["text"])
+                if res["verdict"] == "operator":
+                    cid = name + "#" + str(idx)
+                    parts.append(
+                        "<li>" + text + "<span class='ctl' data-id='"
+                        + html.escape(cid) + "' data-test='"
+                        + html.escape(name) + "' data-cp='"
+                        + html.escape(res["text"][:120]) + "'>"
+                        "<button data-v='pass' aria-pressed='false'>pass</button>"
+                        "<button data-v='fail' aria-pressed='false'>fail</button>"
+                        "</span></li>")
+                else:
+                    cls = {"pass": "auto-pass", "fail": "auto-fail"}.get(
+                        res["verdict"], "")
+                    extra = ""
+                    if res["detail"]:
+                        extra = " <em>" + html.escape(res["detail"]) + "</em>"
+                    parts.append("<li class='" + cls + "'>"
+                                 + marks.get(res["verdict"], "") + " " + text
+                                 + extra + "</li>")
             parts.append("</ol></div>")
 
-    parts.append("</body></html>")
+    parts.append("</main><script>" + WORKSHEET_JS + "</script></body></html>")
     (dest / "index.html").write_text("\n".join(parts), encoding="utf-8")
 
 
@@ -243,6 +408,9 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--profile", default="webcgm")
     ap.add_argument("--worksheet", type=Path)
+    ap.add_argument("--embed", action="store_true",
+                    help="inline images as data URIs so the "
+                         "worksheet is one self-contained file")
     ap.add_argument("--rasterizer",
                     help="command template using {svg} {png} {w} {h}; "
                          "renders this converter's output into the worksheet")
@@ -386,7 +554,7 @@ def main() -> int:
     print("wrote {}".format(args.out))
 
     if args.worksheet:
-        build_worksheet(args.worksheet, args.suite, rows)
+        build_worksheet(args.worksheet, args.suite, rows, args.embed)
         print("wrote {}".format(args.worksheet / "index.html"))
 
     # Non-zero exit on any mechanically decided failure, so this can gate CI.
