@@ -50,3 +50,12 @@ jobs:
         env:
           OPENCGM_SAMPLES_DIR: ${{ github.workspace }}/testdata
         run: ctest --test-dir build --build-config Release --output-on-failure
+
+      # The mechanically decidable subset of the WebCGM static10 operator
+      # checkpoints. Fails the build if any regresses.
+      - name: Conformance checkpoints
+        run: >
+          python scripts/conformance.py
+          --cli build/bin/opencgm_cli
+          --suite testdata/webcgm21-ts
+          --out /tmp/conformance-report.md

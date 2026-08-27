@@ -130,12 +130,35 @@ checkout.
 This measures conversion coverage and SVG well-formedness, not visual
 fidelity, and is not a WebCGM conformance certification.
 
-For fidelity, `scripts/visual-compare.py` rasterises the converted SVG and
-compares it against the suite's reference images
-([docs/visual-comparison.md](docs/visual-comparison.md)). It is a regression
-*screen* rather than a pass/fail result -- font substitution makes exact pixel
-agreement impossible -- but it ranks cases by divergence and has already
-surfaced real gaps.
+## Conformance checkpoints
+
+The WebCGM static test suite ships its methodology in machine-readable form:
+`static10/webCGMsuite.xml` lists the official operator checkpoints for each of
+its 232 rendering test cases. `scripts/conformance.py` runs them:
+
+| | Checkpoints |
+| --- | --- |
+| total | 912 |
+| decided mechanically | 438 (48%) |
+| &nbsp;&nbsp;passed | **438** |
+| &nbsp;&nbsp;failed | **0** |
+| require an operator | 474 (52%) |
+
+Full results by CGM category are in
+[docs/conformance-report.md](docs/conformance-report.md). Checkpoints that
+describe what a person should see are written to an operator worksheet
+(`--worksheet`) pairing each reference image with this converter's rendering.
+
+This is not a conformance certification, and OpenCGM does not claim WebCGM
+conformance: that is defined for *viewers*, and the suite's `20tests`,
+`21tests` and `dynamic10` modules almost entirely exercise a viewer's DOM and
+XCF APIs and link navigation, which a converter has no part in. The `static10`
+module is the part that tests rendering, and it is what is measured.
+
+`scripts/visual-compare.py` additionally rasterises converted output and ranks
+cases by divergence from the reference images
+([docs/visual-comparison.md](docs/visual-comparison.md)) as a regression
+screen; it has already surfaced real gaps.
 
 ## Contributing
 
