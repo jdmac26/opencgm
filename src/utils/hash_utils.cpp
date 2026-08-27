@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <sstream>
 #include <cstring>
+#include <cstdint>
 
 namespace opencgm {
 namespace utils {

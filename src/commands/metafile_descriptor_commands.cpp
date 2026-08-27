@@ -6,6 +6,7 @@
 #include <sstream>
 #include <cstring>
 #include <iomanip>
+#include <cstdint>
 
 namespace {
 

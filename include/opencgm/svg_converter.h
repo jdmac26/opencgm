@@ -27,6 +27,7 @@
 #include <memory>
 #include <regex>
 #include <set>
+#include <cstdint>
 
 // Forward declarations to avoid including stb headers in the public interface
 struct stbtt_fontinfo;

@@ -6,6 +6,7 @@
 #include "opencgm/security_limits.h"
 #include "opencgm/utils/sdr_parser.h"
 #include <stdexcept>
+#include <cstdint>
 
 namespace opencgm {
 

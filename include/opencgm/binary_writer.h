@@ -7,6 +7,7 @@
 #include <vector>
 #include <memory>
 #include <array>
+#include <cstdint>
 
 namespace opencgm {
 

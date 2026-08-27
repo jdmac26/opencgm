@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <regex>
 #include <fstream>
+#include <cstdint>
 
 namespace
 {

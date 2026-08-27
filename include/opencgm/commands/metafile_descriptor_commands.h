@@ -7,6 +7,7 @@
 #include "../cgm_point.h"
 #include <string>
 #include <vector>
+#include <cstdint>
 
 namespace opencgm {
 

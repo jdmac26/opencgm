@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <optional>
+#include <cstdint>
 
 namespace {
 

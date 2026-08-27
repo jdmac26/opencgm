@@ -35,6 +35,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <cstdint>
 
 // Thread-local error storage (see thread safety documentation above)
 thread_local CGMErrorCode g_last_error = CGM_SUCCESS;

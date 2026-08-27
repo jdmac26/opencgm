@@ -9,6 +9,7 @@
 #include <iterator>
 #include <sstream>
 #include <vector>
+#include <cstdint>
 
 namespace opencgm {
 

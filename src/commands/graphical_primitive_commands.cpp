@@ -3,6 +3,7 @@
 #include "opencgm/cgm_file.h"
 #include "opencgm/security_limits.h"
 #include <sstream>
+#include <cstdint>
 
 namespace opencgm {
 

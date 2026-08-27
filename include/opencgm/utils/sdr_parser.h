@@ -5,6 +5,7 @@
 #include <vector>
 #include <utility>
 #include <optional>
+#include <cstdint>
 
 namespace opencgm {
 

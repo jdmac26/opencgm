@@ -11,6 +11,7 @@
 #include <map>
 #include <set>
 #include <utility>
+#include <cstdint>
 
 namespace opencgm {
 

@@ -6,6 +6,7 @@
 #include "../cgm_color.h"
 #include <vector>
 #include <string>
+#include <cstdint>
 
 namespace opencgm {
 
