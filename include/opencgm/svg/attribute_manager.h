@@ -36,7 +36,7 @@ public:
     /**
      * Attribute set containing multiple format variants
      *
-     * Tier 0 = webcgm (SDI de-facto namespace, baseline for the WebCGM family)
+     * Tier 0 = webcgm (de-facto namespace, baseline for the WebCGM family)
      * Tier 1 = legacy (HTML5 data-aps-* compatibility layer)
      * Tier 2 = s1000d / s1000d_legacy / vendor (standards-specific overlay)
      */
@@ -63,7 +63,7 @@ public:
         bool emit_link_title = true;
         bool emit_screen_tip = true;
         bool emit_auxiliary = true;  ///< visibility, layer, behavior, desc, and vendor extensions
-        bool emit_webcgm_namespace = true;  ///< Tier 0: SDI de-facto webcgm:* attrs on every APS <g>
+        bool emit_webcgm_namespace = true;  ///< Tier 0: de-facto webcgm:* attrs on every APS <g>
     };
 
     /**
