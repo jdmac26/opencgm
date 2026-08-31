@@ -42,10 +42,9 @@ AttributeManager::AttributeSet AttributeManager::transformAttributes(
         return gates_.emit_auxiliary;
     };
 
-    // Tier 0: WebCGM 2.1 namespace baseline. SDI de-facto convention that traditional
-    // IETP viewers (Arbortext IsoView/IsoDraw, SDI viewer, Lattice XVL, RWS LiveContent)
-    // consume via getAttributeNS(). Emitted for every WebCGM-family format; opt out via
-    // gates_.emit_webcgm_namespace (CALS / StandardSVG).
+    // Tier 0: WebCGM 2.1 namespace baseline. A de-facto convention across traditional IETP
+    // viewers, which consume these via getAttributeNS(). Emitted for every WebCGM-family
+    // format; opt out via gates_.emit_webcgm_namespace (CALS / StandardSVG).
     if (includeWebCgmNamespace()) {
         if (gates_.emit_name && !apsName.empty()) {
             attrs.webcgm["webcgm:name"] = apsName;

@@ -114,7 +114,7 @@ void print_usage(const char *exe)
                  "                                       cals, pip (cgmpip), cgmplus,\n"
                  "                                       or any catalog profile name.\n"
                  "                                     Individual flags override preset values.\n"
-                 "  --webcgm-namespace <on|off>        Emit xmlns:webcgm + webcgm:* attrs (SDI de-facto\n"
+                 "  --webcgm-namespace <on|off>        Emit xmlns:webcgm + webcgm:* attrs (de-facto\n"
                  "                                     convention for traditional IETP viewers). Default:\n"
                  "                                     on for WebCGM-family presets, off for cals.\n"
                  "  --adopt-view-on-load [true|false]  Adopt viewcontext on load (default depends on profile)\n"

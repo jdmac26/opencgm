@@ -159,7 +159,7 @@ extern "C" {
     OPENCGM_API void           opencgm_set_preserve_aps_region(opencgm_ctx_t* ctx, int enabled);
     OPENCGM_API void           opencgm_set_preserve_aps_screen_tip(opencgm_ctx_t* ctx, int enabled);
 
-    // Tier 0 SDI / WebCGM 2.1 namespace baseline: declare xmlns:webcgm on root <svg>
+    // Tier 0 WebCGM 2.1 namespace baseline: declare xmlns:webcgm on root <svg>
     // and emit webcgm:type / webcgm:layername / etc. per APS <g>. Enabled by default
     // for the WebCGM family. Disable for clean SVG / CALS-class outputs.
     OPENCGM_API void           opencgm_set_webcgm_namespace(opencgm_ctx_t* ctx, int enabled);
