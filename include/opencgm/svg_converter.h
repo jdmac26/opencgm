@@ -1574,6 +1574,13 @@ private:
     // Text rendering options (thin config shim)
     TextRenderOptions text_options_;
     bool text_as_path_warning_emitted_;
+
+    // Latches for the fill fallbacks in getFillAttributeForCurrentStyle(). Each degradation
+    // warns once per conversion: the same unsupported style typically covers every filled
+    // primitive in a metafile, and a line per shape would bury the fact rather than report it.
+    std::set<int> unsupported_fill_styles_warned_;
+    bool pattern_fallback_warning_emitted_ = false;
+    bool hatch_fallback_warning_emitted_ = false;
     mutable bool font_substitutions_cache_dirty_ = true;
     mutable std::vector<std::pair<std::regex, std::string>> compiled_font_substitutions_;
 

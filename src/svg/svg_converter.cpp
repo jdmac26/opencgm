@@ -8853,6 +8853,12 @@ namespace opencgm
         }
     }
 
+    // Known blind spot: seven emitters take SVGStyle::getStyleWithEdges() instead of coming
+    // through here, and that calls getFillStyle() directly - so they resolve neither patterns
+    // nor hatches, and the warnings below never fire for them. processCircularArc3PointClose
+    // is one, which is why the pattern fill in samples/ata30-cgms/crar3c01.cgm is lost with
+    // nothing said. Tracked separately; routing those sites through here is a behaviour change
+    // that needs its own visual-regression pass, not a rider on a diagnostic commit.
     std::string SVGConverter::getFillAttributeForCurrentStyle()
     {
         int fs = current_style_.fillStyle();
@@ -8868,6 +8874,15 @@ namespace opencgm
             {
                 return std::string("fill=\"url(#") + patId + ")\" ";
             }
+            // Resolution failed and we are about to paint a flat colour where a tiled
+            // pattern belongs. Indistinguishable in the output from a deliberate solid
+            // fill, so it has to be said out loud.
+            if (!pattern_fallback_warning_emitted_)
+            {
+                std::cerr << "[svg] PATTERN INDEX " << current_style_.patternIndex()
+                          << " did not resolve to a pattern; filling solid instead\n";
+                pattern_fallback_warning_emitted_ = true;
+            }
             break;
         }
         case 3: // HATCH
@@ -8877,9 +8892,27 @@ namespace opencgm
             {
                 return std::string("fill=\"url(#") + patId + ")\" ";
             }
+            if (!hatch_fallback_warning_emitted_)
+            {
+                std::cerr << "[svg] HATCH INDEX " << current_style_.hatchIndex()
+                          << " did not resolve to a pattern; filling solid instead\n";
+                hatch_fallback_warning_emitted_ = true;
+            }
             break;
         }
         default:
+            // SOLID (1) also lands here and is genuinely handled by getFillStyle() - it is
+            // not a fallback and must not warn. Everything else is: 5 (geometric pattern),
+            // 6 (interpolated), or a value outside the standard range. Those fall through
+            // and get painted in the current fill colour, which is a plausible looking
+            // result rather than an obviously broken one - precisely why it needs saying.
+            // interpolated-interior-01 renders as a solid black square where a gradient
+            // belongs, and scores worse than any other test in the conformance screen.
+            if (fs != 1 && unsupported_fill_styles_warned_.insert(fs).second)
+            {
+                std::cerr << "[svg] INTERIOR STYLE " << fs << " (" << interiorStyleName(fs)
+                          << ") is not rendered; filling solid instead\n";
+            }
             break;
         }
         return current_style_.getFillStyle();
@@ -8921,6 +8954,10 @@ namespace opencgm
             return "HATCH";
         case 4:
             return "EMPTY";
+        case 5:
+            return "GEOMETRIC PATTERN";
+        case 6:
+            return "INTERPOLATED";
         default:
             return "UNKNOWN";
         }
