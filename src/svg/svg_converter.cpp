@@ -4285,6 +4285,8 @@ namespace opencgm
         if (!cmd)
             return;
 
+        const std::string styleAttrs = closedArcFillAndEdge();
+
         CGMPoint center_vdc = cmd->center();
         CGMPoint cdp1_vdc = cmd->firstConjugate();
         CGMPoint cdp2_vdc = cmd->secondConjugate();
@@ -4319,7 +4321,7 @@ namespace opencgm
             {
                 svg_output_ << " Z";
             }
-            svg_output_ << "\" " << current_style_.getStyleWithEdges() << "/>\n";
+            svg_output_ << "\" " << styleAttrs << "/>\n";
             return;
         }
 
@@ -4373,7 +4375,7 @@ namespace opencgm
             svg_output_ << "  <ellipse cx=\"" << center_svg.x()
                         << "\" cy=\"" << center_svg.y()
                         << "\" rx=\"" << rx << "\" ry=\"" << ry << "\" ";
-            svg_output_ << current_style_.getStyleWithEdges();
+            svg_output_ << styleAttrs;
             svg_output_ << "/>\n";
             return;
         }
@@ -6940,6 +6942,8 @@ namespace opencgm
         if (!cmd)
             return;
 
+        const std::string styleAttrs = closedArcFillAndEdge();
+
         CGMPoint p1 = cmd->start();
         CGMPoint p2 = cmd->intermediate();
         CGMPoint p3 = cmd->end();
@@ -6962,7 +6966,7 @@ namespace opencgm
             } else {
                 svg_output_ << " Z";
             }
-            svg_output_ << "\" " << current_style_.getStyleWithEdges() << "/>\n";
+            svg_output_ << "\" " << styleAttrs << "/>\n";
             return;
         }
 
@@ -6973,7 +6977,7 @@ namespace opencgm
                         << "\" cy=\"" << arc.center_svg.y()
                         << "\" rx=\"" << arc.rx
                         << "\" ry=\"" << arc.ry << "\" "
-                        << current_style_.getStyleWithEdges()
+                        << styleAttrs
                         << "/>\n";
             return;
         }
@@ -6989,13 +6993,15 @@ namespace opencgm
             svg_output_ << " Z";
         }
 
-        svg_output_ << "\" " << current_style_.getStyleWithEdges() << "/>\n";
+        svg_output_ << "\" " << styleAttrs << "/>\n";
     }
 
     void SVGConverter::processCircularArcCentreClose(CircularArcCentreClose *cmd)
     {
         if (!cmd)
             return;
+
+        const std::string styleAttrs = closedArcFillAndEdge();
 
         auto arc = svg::computeCenterBasedArc(
             cmd->center(),
@@ -7011,7 +7017,7 @@ namespace opencgm
                         << "\" cy=\"" << arc.center_svg.y()
                         << "\" rx=\"" << arc.rx
                         << "\" ry=\"" << arc.ry << "\" "
-                        << current_style_.getStyleWithEdges()
+                        << styleAttrs
                         << "/>\n";
             return;
         }
@@ -7027,7 +7033,7 @@ namespace opencgm
             svg_output_ << " Z";
         }
 
-        svg_output_ << "\" " << current_style_.getStyleWithEdges() << "/>\n";
+        svg_output_ << "\" " << styleAttrs << "/>\n";
     }
 
     void SVGConverter::processTextColor(TextColour *cmd)
@@ -8853,12 +8859,11 @@ namespace opencgm
         }
     }
 
-    // Known blind spot: seven emitters take SVGStyle::getStyleWithEdges() instead of coming
-    // through here, and that calls getFillStyle() directly - so they resolve neither patterns
-    // nor hatches, and the warnings below never fire for them. processCircularArc3PointClose
-    // is one, which is why the pattern fill in samples/ata30-cgms/crar3c01.cgm is lost with
-    // nothing said. Tracked separately; routing those sites through here is a behaviour change
-    // that needs its own visual-regression pass, not a rider on a diagnostic commit.
+    // Every filled primitive must reach its fill through here. Anything that calls
+    // SVGStyle::getFillStyle() directly gets a flat colour and never consults the pattern or
+    // hatch machinery at all - the index, the pattern table and the tile geometry are simply
+    // discarded, and the warnings below cannot fire because the code never arrives. The three
+    // closed-arc emitters did exactly that until closedArcFillAndEdge() was introduced.
     std::string SVGConverter::getFillAttributeForCurrentStyle()
     {
         int fs = current_style_.fillStyle();
@@ -8916,6 +8921,28 @@ namespace opencgm
             break;
         }
         return current_style_.getFillStyle();
+    }
+
+    // The fill+edge pair for the closed-arc primitives (ELLIPTICAL ARC CLOSE, CIRCULAR ARC
+    // 3 POINT CLOSE, CIRCULAR ARC CENTRE CLOSE).
+    //
+    // These are filled-area primitives in CGM and must resolve PATTERN and HATCH indices like
+    // any other. They previously took SVGStyle::getStyleWithEdges(), which is getFillStyle()
+    // plus getEdgeStyle() - and getFillStyle() only knows how to emit a flat colour. So a
+    // pattern fill on a closed arc was not merely unresolved: the pattern machinery was never
+    // consulted, and the index, the pattern table and the tile geometry were all discarded
+    // without a word. samples/ata30-cgms/crar3c01.cgm converts that way today.
+    //
+    // The edge half is deliberately left exactly as it was, so the only behaviour that moves
+    // is the fill.
+    //
+    // Call this before writing the element: resolving a pattern can open a <defs> block, and
+    // that has to be closed before the shape is emitted or the definition lands mid-element.
+    std::string SVGConverter::closedArcFillAndEdge()
+    {
+        std::string fill = getFillAttributeForCurrentStyle();
+        closeOpenDefs();
+        return fill + current_style_.getEdgeStyle();
     }
 
     std::string SVGConverter::buildFillAndEdgeAttributes(bool overrideEdgeVisibility, bool edgeVisibleOverride)

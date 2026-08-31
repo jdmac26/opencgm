@@ -1215,6 +1215,7 @@ private:
     double hatchStrokeWidth() const;
     std::string getFillAttributeForCurrentStyle();
     std::string buildFillAndEdgeAttributes(bool overrideEdgeVisibility = false, bool edgeVisibleOverride = false);
+    std::string closedArcFillAndEdge();
     void applyFillBundle(int index);
     void applyFillBundleEntry(const FillBundleEntry& entry, const char* reason);
     void resetTileArrayState();
