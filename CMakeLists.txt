@@ -23,6 +23,15 @@ else()
     string(STRIP "${OPENCGM_VERSION_PREFIX}" OPENCGM_VERSION_PREFIX)
     set(OPENCGM_VERSION_SUFFIX "")
     message(STATUS "Engine version from VERSION file: ${OPENCGM_VERSION_PREFIX}")
+
+    # vcpkg.json carries the version too (the parent repository checks it).
+    # v1.5.0 bumped only that file, so standalone builds called themselves
+    # 1.4.0; refuse to configure rather than mislabel output again.
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg.json" OPENCGM_VCPKG_MANIFEST)
+    string(REGEX MATCH "\"version\"[ \t]*:[ \t]*\"([^\"]+)\"" _OPENCGM_VCPKG_VERSION_MATCH "${OPENCGM_VCPKG_MANIFEST}")
+    if(NOT CMAKE_MATCH_1 STREQUAL OPENCGM_VERSION_PREFIX)
+        message(FATAL_ERROR "VERSION (${OPENCGM_VERSION_PREFIX}) and vcpkg.json (${CMAKE_MATCH_1}) disagree; bump both together")
+    endif()
 endif()
 
 if(OPENCGM_VERSION_SUFFIX STREQUAL "")
@@ -73,7 +82,9 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 
 # Options
 option(BUILD_SHARED_LIBS "Build shared library" ON)
-option(BUILD_TESTS "Build tests" ON)
+# Off by default: the test build downloads GoogleTest, and a plain build of
+# the library and tools should not need git or network access.
+option(BUILD_TESTS "Build tests (fetches GoogleTest)" OFF)
 option(BUILD_DEBUG_TOOLS "Build debug and diagnostic tools (development only)" OFF)
 option(ENABLE_SKIA_RENDERER "Build with native Skia renderer support" OFF)
 

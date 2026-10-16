@@ -31,7 +31,7 @@ namespace
             DocumentSerializer::profileLabel(
                 OutputProfile::StandardSVG,
                 "compat"),
-            "auto");
+            "compat");
         EXPECT_EQ(
             DocumentSerializer::profileLabel(
                 OutputProfile::WebCGM21,

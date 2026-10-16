@@ -940,8 +940,17 @@ namespace opencgm
                      firstCmd->toString(), firstCmd->elementId());
         }
 
-        // Last command should be END METAFILE
-        const auto *lastCmd = cgmFile->commands().back().get();
+        // Last command should be END METAFILE. NO-OP (class 0, id 0) is
+        // padding the standard permits anywhere, and encoders commonly pad
+        // the file to a block boundary after END METAFILE, so skip it.
+        const auto &commands = cgmFile->commands();
+        auto last = commands.rbegin();
+        while (last != commands.rend() && (*last)->elementClass() == ClassCode::DelimiterElement &&
+               (*last)->elementId() == 0)
+        {
+            ++last;
+        }
+        const auto *lastCmd = (last != commands.rend() ? *last : commands.back()).get();
         if (lastCmd->elementClass() != ClassCode::DelimiterElement || lastCmd->elementId() != 2)
         {
             addWarning("Metafile should end with END METAFILE", "ISO/IEC 8632-1",
