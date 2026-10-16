@@ -27,15 +27,24 @@ support for WebCGM 2.1 and S1000D.
 
 Requires CMake 3.15+, a C++17 compiler, and optionally
 [Skia](https://skia.org) for the native renderer (consumed via vcpkg; see
-`vcpkg.json`, and configure with `-DENABLE_SKIA_RENDERER=ON`).
+`vcpkg.json`, and configure with `-DENABLE_SKIA_RENDERER=ON`). A plain build
+needs no network access.
 
 ```bash
-cmake -B build
-cmake --build build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
 ```
 
-Binaries land in `build/bin`: `opencgm_cli`, `cgm_validate`, and the
-`opencgm` shared library.
+This produces `opencgm_cli`, `cgm_validate`, and the `opencgm` shared
+library. Single-configuration generators (Make, Ninja) put them in
+`build/bin`. Multi-configuration generators (Visual Studio, Xcode) use a
+subdirectory per configuration, such as `build/bin/Release`. Without
+`--config Release` you get an unoptimised Debug build.
+
+On Windows, clone to a short path such as `C:\src\opencgm`. MSBuild's
+file-tracking logs nest deeply under `build/`, and a long checkout path can
+exceed the 260-character limit, which surfaces as CMake reporting
+`No CMAKE_CXX_COMPILER could be found`.
 
 ## Usage
 
@@ -47,7 +56,13 @@ opencgm_cli --profile s1000d input.cgm output.svg
 
 Common options:
 
-- `--profile <s1000d|webcgm|compat>` — output profile (`s1000d` is the default)
+- `--profile <s1000d|s1000d-legacy|webcgm|compat>` — output profile (`s1000d`
+  is the default; `s1000d-legacy` targets pre-Issue 6 IETP viewers; `compat`
+  relaxes WebCGM rules for metafiles that use ISO 8632 segments)
+- `--preset <name>` — apply a built-in preset from
+  [config/profile-presets.json](config/profile-presets.json): `s1000d`,
+  `s1000dlegacy`, `ata`, `webcgm`, `cals`, `pip`, `cgmplus`. Individual flags
+  override preset values.
 - `--font-map <file>` — JSON font map describing CGM font substitutions and
   optional embedded WOFF2 resources
 - `--text-as-path` / `--text-as-path-threshold <value>` — outline text for
@@ -56,24 +71,43 @@ Common options:
   `--geometry-tolerance <value>` (default: 0.01 user units)
 - `--geometry-log` / `--raster-log` — emit diagnostics to stderr
 
-`opencgm_cli --help` lists every flag.
+`opencgm_cli --help` lists every flag, including watch-folder mode
+(`--watch <dir> --output-dir <dir>`). `opencgm_cli --version` prints the
+version.
+
+`cgm_validate input.cgm` checks a metafile against a profile (WebCGM 2.1,
+ATA GREXCHANGE, S1000D, or ISO 8632; auto-detected by default) without
+converting it. Add `--json` for machine-readable output.
 
 ### Library
+
+Convert through the stable C API in `include/opencgm/c_api.h`, which is also
+the surface for binding from other languages:
+
+```cpp
+#include <opencgm/c_api.h>
+
+opencgm_ctx_t* ctx = opencgm_create();
+opencgm_set_profile(ctx, "s1000d");
+if (opencgm_convert_cgm_to_svg(ctx, "input.cgm", "output.svg") != OPENCGM_OK) {
+    fprintf(stderr, "%s\n", opencgm_last_error());
+}
+opencgm_destroy(ctx);
+```
+
+Or work with the parsed metafile directly in C++:
 
 ```cpp
 #include <opencgm/cgm_file.h>
 
-auto cgmFile = cgm::BinaryCGMFile("input.cgm");
+opencgm::BinaryCGMFile cgmFile("input.cgm");
 
-for (const auto& command : cgmFile.getCommands()) {
-    // inspect or transform
+for (const auto& command : cgmFile.commands()) {
+    // inspect or transform, e.g. command->toString()
 }
 
 cgmFile.writeFile("output.cgm");
 ```
-
-A stable C API is available in `include/opencgm/c_api.h` for binding from other
-languages.
 
 ## Layout
 
@@ -91,10 +125,13 @@ languages.
 
 ## Tests
 
+Tests are off by default because enabling them downloads GoogleTest, which
+needs git and network access:
+
 ```bash
-cmake -B build -DBUILD_TESTS=ON
-cmake --build build
-ctest --test-dir build
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+cmake --build build --config Release
+ctest --test-dir build -C Release
 ```
 
 That runs green on a fresh clone. Sample corpora are **not vendored** — the
@@ -103,13 +140,16 @@ data under their own terms — so tests needing a corpus skip until you fetch on
 
 ```bash
 python scripts/fetch-testdata.py
-export OPENCGM_SAMPLES_DIR=$PWD/testdata
+export OPENCGM_SAMPLES_DIR=$PWD/testdata         # bash
+$env:OPENCGM_SAMPLES_DIR = "$PWD\testdata"       # PowerShell
 ```
 
 The WebCGM suite downloads automatically from OASIS with a pinned checksum and
-activates 78 further tests. The S1000D Bike Data Set is distributed through the
+activates 31 further tests. The S1000D Bike Data Set is distributed through the
 S1000D users' portal and must be installed by hand; the script prints
-instructions.
+instructions. Two golden fixtures also use ATA iSpec 2200 GREXCHANGE test
+metafiles, which are not publicly redistributable and stay skipped unless you
+have them (the script says where to put them).
 
 ## Conversion coverage
 
@@ -156,9 +196,17 @@ XCF APIs and link navigation, which a converter has no part in. The `static10`
 module is the part that tests rendering, and it is what is measured.
 
 `scripts/visual-compare.py` additionally rasterises converted output and ranks
-cases by divergence from the reference images
-([docs/visual-comparison.md](docs/visual-comparison.md)) as a regression
-screen; it has already surfaced real gaps.
+all 312 reference-paired cases, `static10` included, by divergence from the
+reference images ([docs/visual-comparison.md](docs/visual-comparison.md)) as a
+regression screen; it has already surfaced real gaps. Reproduce it with any
+rasteriser, for example
+[resvg](https://github.com/linebender/resvg) (`cargo install resvg`):
+
+```bash
+python scripts/visual-compare.py --cli build/bin/opencgm_cli \
+    --corpus testdata/webcgm21-ts --out docs/visual-comparison.md \
+    --rasterizer "resvg --width {w} --height {h} {svg} {png}"
+```
 
 ## Contributing
 

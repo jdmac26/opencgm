@@ -2864,6 +2864,8 @@ namespace opencgm
 
         nominal_line_width_svg_ = std::max(transform_.transformLength(abstract_line_width_unit_), 0.1);
         nominal_edge_width_svg_ = std::max(transform_.transformLength(abstract_edge_width_unit_), 0.1);
+        minimum_dash_unit_svg_ = transform_.transformLength(longest_side_reference) / 250.0;
+        current_style_.setMinimumDashUnit(minimum_dash_unit_svg_);
         double viewbox_width_final = svg_bounds_x2_ - svg_bounds_x1_;
         double viewbox_height_final = svg_bounds_y2_ - svg_bounds_y1_;
         picture_scale_x_ = (picture_vdc_width_ > 0.0) ? (viewbox_width_final / picture_vdc_width_) : 1.0;
@@ -3437,6 +3439,9 @@ namespace opencgm
                 break;
             case 40: // LINE TYPE INITIAL OFFSET
                 processLineTypeInitialOffset(dispatchCast<LineTypeInitialOffset, ClassCode::AttributeElements, 40>(cmd));
+                break;
+            case 42: // RESTRICTED TEXT TYPE
+                processRestrictedTextType(dispatchCast<RestrictedTextType, ClassCode::AttributeElements, 42>(cmd));
                 break;
             case 44: // EDGE CAP
                 processEdgeCap(dispatchCast<EdgeCap, ClassCode::AttributeElements, 44>(cmd));
@@ -4372,11 +4377,14 @@ namespace opencgm
 
         if (vectorsNearlyEqual(startDelta, endDelta))
         {
-            svg_output_ << "  <ellipse cx=\"" << center_svg.x()
-                        << "\" cy=\"" << center_svg.y()
-                        << "\" rx=\"" << rx << "\" ry=\"" << ry << "\" ";
-            svg_output_ << styleAttrs;
-            svg_output_ << "/>\n";
+            // Path rather than <ellipse>: it carries the rotation in the arc
+            // commands (the bare ellipse dropped it, so ellipses whose
+            // conjugate diameters are not axis-aligned rendered unrotated)
+            // and can draw the radius segment a PIE closure requires.
+            svg_output_ << "  <path d=\""
+                        << svg::fullEllipsePathData(center_svg, start_svg, rx, ry,
+                                                    rotation, cmd->closure() == 0)
+                        << "\" " << styleAttrs << "/>\n";
             return;
         }
 
@@ -4758,6 +4766,9 @@ namespace opencgm
         // Capture alignment at start of text sequence
         pending_text_h_align_ = current_style_.textHAlign();
         pending_text_v_align_ = current_style_.textVAlign();
+        pending_text_path_ = current_style_.textPath();
+        pending_text_cont_h_ = current_style_.continuousHAlign();
+        pending_text_cont_v_ = current_style_.continuousVAlign();
         pending_text_rotation_deg_ = currentTextRotationDegrees();
         pending_text_has_rotation_ = std::fabs(pending_text_rotation_deg_) > 1e-6;
 
@@ -4845,6 +4856,15 @@ namespace opencgm
 
         if (shouldEmitTextAsPath(params))
         {
+            // Outlines have no textLength; fold the fit into the horizontal
+            // expansion the outline emitter already applies.
+            if (params.text_length > 0.0)
+            {
+                double natural = measureTextWidth(params.text_content, params.font_family, params.font_size_svg) * params.expansion;
+                if (natural > 0.0)
+                    params.expansion *= params.text_length / natural;
+                params.text_length = 0.0;
+            }
             emitTextAsPath(params);
         }
         else
@@ -4937,6 +4957,13 @@ namespace opencgm
         }
 
         svg_output_ << "font-size=\"" << params.font_size_svg << "\"";
+        if (params.text_length > 0.0)
+        {
+            // Fits the run to the restriction box whatever font the viewer
+            // substitutes, which a font-size alone cannot guarantee.
+            svg_output_ << " textLength=\"" << params.text_length << "\" lengthAdjust=\""
+                        << (params.text_length_spacing_only ? "spacing" : "spacingAndGlyphs") << "\"";
+        }
         if (params.preserve_whitespace)
         {
             svg_output_ << " xml:space=\"preserve\"";
@@ -5278,6 +5305,38 @@ namespace opencgm
             // or "001", the attribute is meaningless byte waste.
             params.preserve_whitespace = cmd->text().find_first_of(" \t\n\r") != std::string::npos;
 
+            if (needsPathTextLayout(current_style_.textPath(), current_style_.textHAlign(), current_style_.textVAlign()))
+            {
+                PathTextLayout layout;
+                layout.path = current_style_.textPath();
+                layout.h_align = current_style_.textHAlign();
+                layout.v_align = current_style_.textVAlign();
+                layout.cont_h = current_style_.continuousHAlign();
+                layout.cont_v = current_style_.continuousVAlign();
+                layout.restricted = true;
+                layout.box_width_svg = transform_.transformLength(cmd->deltaWidth());
+                layout.box_height_svg = transform_.transformLength(cmd->deltaHeight());
+                emitPathText(params, layout);
+                return;
+            }
+
+            if (cmd->text().find_first_of("\r\n") == std::string::npos)
+            {
+                double natural_width = measureTextWidth(cmd->text(), params.font_family, font_size_svg) * params.expansion;
+                if (cmd->text().size() > 1)
+                    natural_width += (cmd->text().size() - 1) * params.letter_spacing;
+                const RestrictedTextFit fit = fitRestrictedText(
+                    font_size_svg, natural_width,
+                    transform_.transformLength(cmd->deltaWidth()),
+                    transform_.transformLength(cmd->deltaHeight()));
+                if (font_size_svg > 0.0)
+                    params.letter_spacing *= fit.font_size_svg / font_size_svg;
+                params.font_size_svg = fit.font_size_svg;
+                params.line_height = fit.font_size_svg;
+                params.text_length = fit.text_length;
+                params.text_length_spacing_only = fit.spacing_only;
+            }
+
             switch (current_style_.textHAlign())
             {
             case 2:
@@ -5325,6 +5384,9 @@ namespace opencgm
 
             pending_text_h_align_ = current_style_.textHAlign();
             pending_text_v_align_ = current_style_.textVAlign();
+            pending_text_path_ = current_style_.textPath();
+            pending_text_cont_h_ = current_style_.continuousHAlign();
+            pending_text_cont_v_ = current_style_.continuousVAlign();
             pending_text_rotation_deg_ = currentTextRotationDegrees();
             pending_text_has_rotation_ = std::fabs(pending_text_rotation_deg_) > 1e-6;
 
@@ -5357,6 +5419,9 @@ namespace opencgm
             pending_text_segments_.clear();
             pending_text_h_align_ = current_style_.textHAlign();
             pending_text_v_align_ = current_style_.textVAlign();
+            pending_text_path_ = current_style_.textPath();
+            pending_text_cont_h_ = current_style_.continuousHAlign();
+            pending_text_cont_v_ = current_style_.continuousVAlign();
             pending_text_rotation_deg_ = currentTextRotationDegrees();
             pending_text_has_rotation_ = std::fabs(pending_text_rotation_deg_) > 1e-6;
         }
@@ -5389,6 +5454,49 @@ namespace opencgm
 
         CGMPoint base_position_svg = transform_.transformPoint(pending_text_position_);
 
+        if (needsPathTextLayout(pending_text_path_, pending_text_h_align_, pending_text_v_align_))
+        {
+            // Laid out as one run in the first segment's style; per-segment
+            // attribute changes are not carried into non-rightward paths.
+            const auto &first = pending_text_segments_.front();
+            TextEmitterParams params;
+            params.position_svg = base_position_svg;
+            params.font_size_svg = transform_.transformLength(first.height);
+            params.line_height = params.font_size_svg;
+            params.color_hex = colorToHexString(first.color);
+            params.font_family = first.font_family;
+            params.letter_spacing = first.letter_spacing;
+            params.expansion = first.expansion;
+            params.rotation_deg = pending_text_rotation_deg_;
+            params.has_rotation = pending_text_has_rotation_;
+            params.wrap_aps_substring = !aps_stack_.empty();
+            for (const auto &seg : pending_text_segments_)
+                params.text_content += seg.text;
+            params.preserve_whitespace = params.text_content.find_first_of(" \t\n\r") != std::string::npos;
+
+            PathTextLayout layout;
+            layout.path = pending_text_path_;
+            layout.h_align = pending_text_h_align_;
+            layout.v_align = pending_text_v_align_;
+            layout.cont_h = pending_text_cont_h_;
+            layout.cont_v = pending_text_cont_v_;
+            layout.restricted = pending_is_restricted_text_;
+            layout.box_width_svg = transform_.transformLength(pending_restricted_delta_width_);
+            layout.box_height_svg = transform_.transformLength(pending_restricted_delta_height_);
+            emitPathText(params, layout);
+
+            has_last_text_position_ = true;
+            last_text_position_ = pending_text_position_;
+            pending_text_active_ = false;
+            pending_text_segments_.clear();
+            pending_is_restricted_text_ = false;
+            pending_restricted_delta_width_ = 0.0;
+            pending_restricted_delta_height_ = 0.0;
+            pending_text_has_rotation_ = false;
+            pending_text_rotation_deg_ = 0.0;
+            return;
+        }
+
         // Calculate cumulative X offsets for each segment and total width
         std::vector<std::pair<double, size_t>> positioned_segments;
         double current_x_offset = 0.0;
@@ -5415,79 +5523,61 @@ namespace opencgm
         // Auto-scaling for RESTRICTED TEXT per ISO 8632-1:1999 Section 7.6.5:
         // "If necessary, the values of the text attributes CHARACTER HEIGHT...
         // which are used to display this string are varied to achieve the required restriction."
+        // The restriction type (fitRestrictedText) decides how: basic only
+        // shrinks, boxed types stretch to fill, isotropic types scale evenly.
         double scale_factor = 1.0;
+        double width_stretch = 1.0;   // horizontal fit beyond uniform scaling
+        bool stretch_spacing_only = false;
+        std::vector<double> segment_widths;
         if (pending_is_restricted_text_)
         {
-            double width_scale = 1.0;
-            double height_scale = 1.0;
-
-            constexpr double CAP_HEIGHT_RATIO = 0.7;
-
-            // Width scaling: compare measured text width directly to extent width
-            // (extent width is in VDC units, text width is measured at current font-size)
-            if (pending_restricted_delta_width_ > 0.0)
+            double max_font_size = 0.0;
+            for (const auto& seg : pending_text_segments_)
             {
-                double extent_width_svg = transform_.transformLength(pending_restricted_delta_width_);
-                if (total_width > extent_width_svg && extent_width_svg > 0.0)
-                {
-                    width_scale = extent_width_svg / total_width;
-                }
+                max_font_size = std::max(max_font_size, transform_.transformLength(seg.height));
             }
 
-            // Height scaling: compare CAP HEIGHTS (not font-size to extent height)
-            // The extent height is specified in cap-height units (same as CHARACTER HEIGHT),
-            // so we must compare cap height to cap height, not font-size (em-square) to cap height.
-            if (pending_restricted_delta_height_ > 0.0)
+            const RestrictedTextFit fit = fitRestrictedText(
+                max_font_size, total_width,
+                transform_.transformLength(pending_restricted_delta_width_),
+                transform_.transformLength(pending_restricted_delta_height_));
+            if (max_font_size > 0.0)
             {
-                double extent_height_svg = transform_.transformLength(pending_restricted_delta_height_);
-
-                // Find max font size among all segments
-                double max_font_size = 0.0;
-                for (const auto& seg : pending_text_segments_)
-                {
-                    double seg_font_size = transform_.transformLength(seg.height);
-                    max_font_size = std::max(max_font_size, seg_font_size);
-                }
-
-                // Calculate actual cap height: font-size × 0.7
-                // (font-size is em-square, cap height is ~70% of em-square)
-                double actual_cap_height = max_font_size * CAP_HEIGHT_RATIO;
-
-                // Only scale if cap height exceeds extent height
-                if (actual_cap_height > extent_height_svg && extent_height_svg > 0.0)
-                {
-                    height_scale = extent_height_svg / actual_cap_height;
-                }
+                scale_factor = fit.font_size_svg / max_font_size;
             }
 
-            // Use the more restrictive scale factor
-            scale_factor = std::min(width_scale, height_scale);
-
-            // Recalculate positioned_segments with scaled font sizes if scaling is needed
-            if (scale_factor < 1.0)
+            // Re-measure at the scaled size; glyph advances do not scale
+            // exactly linearly once hinting and kerning are involved.
+            positioned_segments.clear();
+            current_x_offset = 0.0;
+            for (size_t i = 0; i < pending_text_segments_.size(); ++i)
             {
-                positioned_segments.clear();
-                current_x_offset = 0.0;
+                const auto& seg = pending_text_segments_[i];
+                positioned_segments.push_back({current_x_offset, i});
 
-                for (size_t i = 0; i < pending_text_segments_.size(); ++i)
+                double seg_font_size = transform_.transformLength(seg.height) * scale_factor;
+                double seg_width = measureTextWidth(seg.text, seg.font_family, seg_font_size);
+                seg_width *= seg.expansion;
+
+                if (!seg.text.empty() && seg.letter_spacing != 0.0)
                 {
-                    const auto& seg = pending_text_segments_[i];
-                    positioned_segments.push_back({current_x_offset, i});
-
-                    // Apply scale factor to font size for width calculation
-                    double seg_font_size = transform_.transformLength(seg.height) * scale_factor;
-                    double seg_width = measureTextWidth(seg.text, seg.font_family, seg_font_size);
-                    seg_width *= seg.expansion;
-
-                    if (!seg.text.empty() && seg.letter_spacing != 0.0)
-                    {
-                        seg_width += (seg.text.length() - 1) * seg.letter_spacing * scale_factor;
-                    }
-
-                    current_x_offset += seg_width;
+                    seg_width += (seg.text.length() - 1) * seg.letter_spacing * scale_factor;
                 }
 
-                total_width = current_x_offset;
+                segment_widths.push_back(seg_width);
+                current_x_offset += seg_width;
+            }
+            total_width = current_x_offset;
+
+            if (fit.text_length > 0.0 && total_width > 0.0)
+            {
+                width_stretch = fit.text_length / total_width;
+                stretch_spacing_only = fit.spacing_only;
+                for (auto& [x_offset, seg_idx] : positioned_segments)
+                {
+                    x_offset *= width_stretch;
+                }
+                total_width = fit.text_length;
             }
         }
 
@@ -5538,6 +5628,11 @@ namespace opencgm
             params.apply_clip = false;
             // See line ~7154 — only preserve whitespace when the text actually has any.
             params.preserve_whitespace = seg.text.find_first_of(" \t\n\r") != std::string::npos;
+            if (std::fabs(width_stretch - 1.0) > 1e-9 && seg_idx < segment_widths.size())
+            {
+                params.text_length = segment_widths[seg_idx] * width_stretch;
+                params.text_length_spacing_only = stretch_spacing_only;
+            }
 
             emitTextRun(params);
         }
@@ -5772,6 +5867,263 @@ namespace opencgm
         current_style_.setCharacterExpansion(cmd->factor());
     }
 
+    void SVGConverter::processRestrictedTextType(RestrictedTextType *cmd)
+    {
+        if (!cmd)
+            return;
+
+        current_style_.setRestrictedTextType(cmd->type());
+    }
+
+    SVGConverter::RestrictedTextFit SVGConverter::fitRestrictedText(
+        double natural_font_size_svg,
+        double natural_width_svg,
+        double box_width_svg,
+        double box_height_svg) const
+    {
+        // ISO/IEC 8632-1 7.7.42. "cap" types fit the box height between the
+        // base and cap lines, "all" types between the bottom and top lines.
+        // The ratios approximate those extents as fractions of the em square.
+        constexpr double CAP_HEIGHT_RATIO = 0.7;
+        constexpr double ALL_HEIGHT_RATIO = 1.0;
+
+        RestrictedTextFit fit;
+        fit.font_size_svg = natural_font_size_svg;
+        const bool haveWidth = box_width_svg > 0.0 && natural_width_svg > 0.0;
+        const bool haveHeight = box_height_svg > 0.0 && natural_font_size_svg > 0.0;
+
+        auto shrinkToFit = [&](double ratio) {
+            double scale = 1.0;
+            if (haveWidth)
+                scale = std::min(scale, box_width_svg / natural_width_svg);
+            if (haveHeight)
+                scale = std::min(scale, box_height_svg / (natural_font_size_svg * ratio));
+            fit.font_size_svg = natural_font_size_svg * scale;
+            return natural_width_svg * scale;
+        };
+
+        switch (current_style_.restrictedTextType())
+        {
+        case RestrictedTextTypeValue::BOXED_CAP:
+        case RestrictedTextTypeValue::BOXED_ALL:
+        {
+            // Stretched independently in both directions to fill the box.
+            const double ratio = current_style_.restrictedTextType() == RestrictedTextTypeValue::BOXED_CAP
+                                     ? CAP_HEIGHT_RATIO : ALL_HEIGHT_RATIO;
+            if (haveHeight)
+                fit.font_size_svg = box_height_svg / ratio;
+            if (haveWidth)
+                fit.text_length = box_width_svg;
+            break;
+        }
+        case RestrictedTextTypeValue::ISOTROPIC_CAP:
+        case RestrictedTextTypeValue::ISOTROPIC_ALL:
+        {
+            // Uniformly scaled, up or down, until it touches the box.
+            const double ratio = current_style_.restrictedTextType() == RestrictedTextTypeValue::ISOTROPIC_CAP
+                                     ? CAP_HEIGHT_RATIO : ALL_HEIGHT_RATIO;
+            double scale = std::numeric_limits<double>::infinity();
+            if (haveWidth)
+                scale = std::min(scale, box_width_svg / natural_width_svg);
+            if (haveHeight)
+                scale = std::min(scale, box_height_svg / (natural_font_size_svg * ratio));
+            if (std::isfinite(scale))
+                fit.font_size_svg = natural_font_size_svg * scale;
+            break;
+        }
+        case RestrictedTextTypeValue::JUSTIFIED:
+        {
+            // Basic, then inter-character spacing widens the run to the box.
+            const double width = shrinkToFit(CAP_HEIGHT_RATIO);
+            if (haveWidth && width < box_width_svg)
+            {
+                fit.text_length = box_width_svg;
+                fit.spacing_only = true;
+            }
+            break;
+        }
+        case RestrictedTextTypeValue::BASIC:
+        default:
+            shrinkToFit(CAP_HEIGHT_RATIO);
+            break;
+        }
+        return fit;
+    }
+
+    bool SVGConverter::needsPathTextLayout(TextPathType path, int h_align, int v_align)
+    {
+        return path != TextPathType::RIGHT || h_align == 4 || v_align == 6;
+    }
+
+    void SVGConverter::emitPathText(TextEmitterParams params, const PathTextLayout &layout)
+    {
+        // Character-body proportions of the em square, measured from the
+        // baseline (SVG y grows downward, so "above" is negative).
+        constexpr double TOP_RATIO = 0.8;
+        constexpr double CAP_RATIO = 0.7;
+        constexpr double BOTTOM_RATIO = 0.2;
+        constexpr double AVG_CHAR_WIDTH_RATIO = 0.6;
+
+        // UTF-8 aware split, so reversal and stacking keep multi-byte glyphs whole.
+        std::vector<std::string> chars;
+        for (size_t i = 0; i < params.text_content.size();)
+        {
+            unsigned char lead = static_cast<unsigned char>(params.text_content[i]);
+            size_t len = lead < 0x80 ? 1 : (lead >> 5) == 0x6 ? 2 : (lead >> 4) == 0xE ? 3 : (lead >> 3) == 0x1E ? 4 : 1;
+            chars.push_back(params.text_content.substr(i, len));
+            i += len;
+        }
+        if (chars.empty())
+            return;
+
+        // The run is laid out in a local frame anchored at the text position
+        // and rotated with the character orientation, as SVG rotate() does.
+        const double radians = params.has_rotation ? params.rotation_deg * M_PI / 180.0 : 0.0;
+        const double cosA = std::cos(radians);
+        const double sinA = std::sin(radians);
+        const CGMPoint anchor = params.position_svg;
+        auto place = [&](double lx, double ly) {
+            return CGMPoint(anchor.x() + lx * cosA - ly * sinA,
+                            anchor.y() + lx * sinA + ly * cosA);
+        };
+
+        const bool vertical = layout.path == TextPathType::UP || layout.path == TextPathType::DOWN;
+
+        // ISO/IEC 8632-1 7.7.18: NORMAL resolves per text path.
+        int h_align = layout.h_align;
+        int v_align = layout.v_align;
+        if (h_align == 0)
+            h_align = vertical ? 2 : (layout.path == TextPathType::LEFT ? 3 : 1);
+        if (v_align == 0)
+            v_align = layout.path == TextPathType::DOWN ? 1 : 4;
+
+        // Fraction of the run's extent, left to right, placed on the anchor.
+        double h_fraction = 0.0;
+        switch (h_align)
+        {
+        case 2: h_fraction = 0.5; break;
+        case 3: h_fraction = 1.0; break;
+        case 4: h_fraction = layout.cont_h; break;
+        default: break;
+        }
+
+        params.text_anchor_attr = "text-anchor=\"start\"";
+        params.dominant_baseline_attr = "dominant-baseline=\"alphabetic\"";
+
+        if (!vertical)
+        {
+            // LEFT advances against the character base vector with upright
+            // glyphs, which is the reversed string laid out rightward.
+            if (layout.path == TextPathType::LEFT)
+            {
+                std::reverse(chars.begin(), chars.end());
+                std::string reversed;
+                for (const auto &c : chars)
+                    reversed += c;
+                params.text_content = reversed;
+            }
+
+            const double natural_fs = params.font_size_svg;
+            const size_t gaps = chars.size() > 1 ? chars.size() - 1 : 0;
+            double width = measureTextWidth(params.text_content, params.font_family, natural_fs) * params.expansion
+                           + gaps * params.letter_spacing;
+            if (layout.restricted)
+            {
+                const RestrictedTextFit fit = fitRestrictedText(natural_fs, width, layout.box_width_svg, layout.box_height_svg);
+                if (natural_fs > 0.0)
+                    params.letter_spacing *= fit.font_size_svg / natural_fs;
+                params.font_size_svg = fit.font_size_svg;
+                params.line_height = fit.font_size_svg;
+                params.text_length = fit.text_length;
+                params.text_length_spacing_only = fit.spacing_only;
+                width = fit.text_length > 0.0
+                            ? fit.text_length
+                            : measureTextWidth(params.text_content, params.font_family, params.font_size_svg) * params.expansion
+                                  + gaps * params.letter_spacing;
+            }
+
+            const double fs = params.font_size_svg;
+            double reference_y = 0.0;  // reference line relative to the baseline
+            switch (v_align)
+            {
+            case 1: reference_y = -TOP_RATIO * fs; break;
+            case 2: reference_y = -CAP_RATIO * fs; break;
+            case 3: reference_y = -CAP_RATIO * fs / 2.0; break;
+            case 5: reference_y = BOTTOM_RATIO * fs; break;
+            case 6: reference_y = BOTTOM_RATIO * fs - layout.cont_v * (TOP_RATIO + BOTTOM_RATIO) * fs; break;
+            default: break;
+            }
+
+            params.position_svg = place(-h_fraction * width, -reference_y);
+            emitTextRun(params);
+            return;
+        }
+
+        // UP / DOWN: upright characters stacked along the up vector, each
+        // centred on the column. UP puts the first character at the bottom.
+        const size_t count = chars.size();
+        double fs = params.font_size_svg;
+        double pitch = fs;
+        if (layout.restricted && layout.box_height_svg > 0.0)
+        {
+            const double box_pitch = layout.box_height_svg / static_cast<double>(count);
+            switch (current_style_.restrictedTextType())
+            {
+            case RestrictedTextTypeValue::BASIC:
+                if (box_pitch < pitch)
+                    fs = pitch = box_pitch;
+                break;
+            case RestrictedTextTypeValue::JUSTIFIED:
+                fs = std::min(fs, box_pitch);
+                pitch = box_pitch;
+                break;
+            default:  // boxed and isotropic types fill the column
+                fs = pitch = box_pitch;
+                break;
+            }
+            if (layout.box_width_svg > 0.0)
+                fs = std::min(fs, layout.box_width_svg / AVG_CHAR_WIDTH_RATIO);
+        }
+
+        double column_width = 0.0;
+        for (const auto &c : chars)
+            column_width = std::max(column_width, measureTextWidth(c, params.font_family, fs) * params.expansion);
+
+        // Column lines relative to the bottom character's baseline.
+        const double top_baseline = -static_cast<double>(count - 1) * pitch;
+        const double top_line = top_baseline - TOP_RATIO * fs;
+        const double cap_line = top_baseline - CAP_RATIO * fs;
+        const double bottom_line = BOTTOM_RATIO * fs;
+        double reference_y = 0.0;
+        switch (v_align)
+        {
+        case 1: reference_y = top_line; break;
+        case 2: reference_y = cap_line; break;
+        case 3: reference_y = cap_line / 2.0; break;
+        case 5: reference_y = bottom_line; break;
+        case 6: reference_y = bottom_line + layout.cont_v * (top_line - bottom_line); break;
+        default: break;
+        }
+        const double centre_x = (0.5 - h_fraction) * column_width;
+
+        params.text_anchor_attr = "text-anchor=\"middle\"";
+        params.text_length = 0.0;
+        params.letter_spacing = 0.0;
+        params.font_size_svg = fs;
+        params.line_height = fs;
+        for (size_t i = 0; i < count; ++i)
+        {
+            if (chars[i].find_first_not_of(" \t") == std::string::npos)
+                continue;  // spaces only advance the column
+            const size_t from_bottom = layout.path == TextPathType::UP ? i : count - 1 - i;
+            TextEmitterParams glyph = params;
+            glyph.text_content = chars[i];
+            glyph.preserve_whitespace = false;
+            glyph.position_svg = place(centre_x, -static_cast<double>(from_bottom) * pitch - reference_y);
+            emitTextRun(glyph);
+        }
+    }
+
     void SVGConverter::processCharacterSpacing(CharacterSpacing *cmd)
     {
         if (!cmd)
@@ -5789,8 +6141,12 @@ namespace opencgm
 
     void SVGConverter::processTextPath(Command *cmd)
     {
-        (void)cmd;
-        // Text path handling is managed via CHARACTER ORIENTATION for now.
+        // CHARACTER ORIENTATION gives the rotation; TEXT PATH gives the
+        // direction characters advance within it (see emitPathText).
+        if (auto *path = dynamic_cast<TextPath *>(cmd))
+        {
+            current_style_.setTextPath(path->path());
+        }
     }
 
     void SVGConverter::processInteriorStyle(InteriorStyle *cmd)
@@ -6973,12 +7329,10 @@ namespace opencgm
         const auto& arc = *arc_opt;
 
         if (arc.is_full_circle) {
-            svg_output_ << "  <ellipse cx=\"" << arc.center_svg.x()
-                        << "\" cy=\"" << arc.center_svg.y()
-                        << "\" rx=\"" << arc.rx
-                        << "\" ry=\"" << arc.ry << "\" "
-                        << styleAttrs
-                        << "/>\n";
+            svg_output_ << "  <path d=\""
+                        << svg::fullEllipsePathData(arc.center_svg, arc.start_svg,
+                                                    arc.rx, arc.ry, 0.0, cmd->closure() == 0)
+                        << "\" " << styleAttrs << "/>\n";
             return;
         }
 
@@ -7013,12 +7367,10 @@ namespace opencgm
             transform_);
 
         if (arc.is_full_circle) {
-            svg_output_ << "  <ellipse cx=\"" << arc.center_svg.x()
-                        << "\" cy=\"" << arc.center_svg.y()
-                        << "\" rx=\"" << arc.rx
-                        << "\" ry=\"" << arc.ry << "\" "
-                        << styleAttrs
-                        << "/>\n";
+            svg_output_ << "  <path d=\""
+                        << svg::fullEllipsePathData(arc.center_svg, arc.start_svg,
+                                                    arc.rx, arc.ry, 0.0, cmd->closure() == 0)
+                        << "\" " << styleAttrs << "/>\n";
             return;
         }
 
@@ -7100,6 +7452,9 @@ namespace opencgm
         current_style_.setTextAlignment(
             cmd->horizontalAlignment(),
             cmd->verticalAlignment());
+        current_style_.setContinuousAlignment(
+            cmd->continuousHorizontal(),
+            cmd->continuousVertical());
     }
 
     void SVGConverter::processPolyBezier(PolyBezier *cmd)
@@ -9026,6 +9381,7 @@ namespace opencgm
     void SVGConverter::resetPictureState()
     {
         current_style_ = SVGStyle();
+        current_style_.setMinimumDashUnit(minimum_dash_unit_svg_);
         fill_bundles_.clear();
         active_fill_bundle_index_ = 1;
         has_layer_aps_ = false;
@@ -9049,6 +9405,9 @@ namespace opencgm
         pending_text_segments_.clear();
         pending_text_h_align_ = current_style_.textHAlign();
         pending_text_v_align_ = current_style_.textVAlign();
+        pending_text_path_ = current_style_.textPath();
+        pending_text_cont_h_ = current_style_.continuousHAlign();
+        pending_text_cont_v_ = current_style_.continuousVAlign();
         pending_text_rotation_deg_ = 0.0;
         pending_text_has_rotation_ = false;
         pending_is_restricted_text_ = false;

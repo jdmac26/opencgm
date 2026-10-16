@@ -940,8 +940,17 @@ namespace opencgm
                      firstCmd->toString(), firstCmd->elementId());
         }
 
-        // Last command should be END METAFILE
-        const auto *lastCmd = cgmFile->commands().back().get();
+        // Last command should be END METAFILE. NO-OP (class 0, id 0) is
+        // padding the standard permits anywhere, and encoders commonly pad
+        // the file to a block boundary after END METAFILE, so skip it.
+        const auto &commands = cgmFile->commands();
+        auto last = commands.rbegin();
+        while (last != commands.rend() && (*last)->elementClass() == ClassCode::DelimiterElement &&
+               (*last)->elementId() == 0)
+        {
+            ++last;
+        }
+        const auto *lastCmd = (last != commands.rend() ? *last : commands.back()).get();
         if (lastCmd->elementClass() != ClassCode::DelimiterElement || lastCmd->elementId() != 2)
         {
             addWarning("Metafile should end with END METAFILE", "ISO/IEC 8632-1",
@@ -3072,15 +3081,10 @@ namespace opencgm
                                    "CIRCULAR ARC CENTRE", 15);
                     }
 
-                    CGMPoint startVector = arcCmd->startDelta();
-                    CGMPoint endVector = arcCmd->endDelta();
-                    if (startVector.x() == endVector.x() && startVector.y() == endVector.y())
-                    {
-                        addWarning("Picture " + std::to_string(currentPictureIndex_ + 1) +
-                                       ": CIRCULAR ARC CENTRE - Degenerate: start and end vectors identical (zero sweep)",
-                                   "WebCGM-2.1 Degeneracy Rules",
-                                   "CIRCULAR ARC CENTRE", 15);
-                    }
+                    // Identical start and end vectors are not a degeneracy:
+                    // ISO/IEC 8632-1 draws a full circle, and WebCGM's
+                    // degeneracy rules (T.14.2) cover only a locus that
+                    // collapses to a point. DGNTST04 exercises exactly this.
                 }
             }
         }

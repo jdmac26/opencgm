@@ -13,6 +13,7 @@
 #include <csignal>
 
 #include "opencgm/c_api.h"
+#include "opencgm/version.h"
 #include "../../third_party/nlohmann/json.hpp"
 
 namespace fs = std::filesystem;
@@ -132,6 +133,7 @@ void print_usage(const char *exe)
                  "  --raster-log                       Emit raster diagnostic logs\n"
                  "  --log <debug|info|quiet>           Set log verbosity\n"
                  "  --verbose                          Print conversion progress\n"
+                 "  --version                          Print the OpenCGM version\n"
                  "  --help                             Show this message\n"
                  "\nWatch Folder Options:\n"
                  "  --watch <dir>                      Watch directory for new CGM files\n"
@@ -819,6 +821,11 @@ int main(int argc, char **argv)
         else if (std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0)
         {
             print_usage(argv[0]);
+            return 0;
+        }
+        else if (std::strcmp(arg, "--version") == 0)
+        {
+            std::printf("opencgm_cli %s\n", opencgm::kEngineVersion);
             return 0;
         }
         else if (std::strcmp(arg, "--watch") == 0)

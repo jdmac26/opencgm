@@ -50,7 +50,10 @@ def pairs(corpus: Path, exclude: tuple[str, ...]) -> list[tuple[Path, Path]]:
     for sub in sorted(p for p in corpus.iterdir() if p.is_dir()):
         if sub.name in exclude:
             continue
-        pngs = {p.stem.lower(): p for p in sub.glob("*.png")}
+        # References sit beside the CGMs in most groups, but static10 -- the
+        # module that actually tests rendering -- keeps them in images/.
+        pngs = {p.stem.lower(): p
+                for p in [*sub.glob("*.png"), *sub.glob("images/*.png")]}
         for pat in ("*.cgm", "*.CGM"):
             for cgm in sub.glob(pat):
                 ref = pngs.get(cgm.stem.lower())
@@ -62,7 +65,13 @@ def pairs(corpus: Path, exclude: tuple[str, ...]) -> list[tuple[Path, Path]]:
 def signature(path: Path) -> tuple[np.ndarray, float]:
     """Downsampled, blurred greyscale plus the fraction of inked pixels."""
     with Image.open(path) as im:
-        grey = im.convert("L")
+        # Rasterisers typically leave the canvas transparent; converting
+        # straight to "L" turns that into black, so every page reads as
+        # solid ink. Flatten onto white first, as a viewer would.
+        rgba = im.convert("RGBA")
+        page = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+        page.alpha_composite(rgba)
+        grey = page.convert("L")
         full = np.asarray(grey, dtype=np.float32) / 255.0
         ink = float((full < INK_THRESHOLD).mean())
         small = grey.resize((GRID, GRID), Image.LANCZOS).filter(

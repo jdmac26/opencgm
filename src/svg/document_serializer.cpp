@@ -66,11 +66,11 @@ namespace opencgm::svg
         OutputProfile profile,
         const std::string &requestedLabel)
     {
+        // Echo the profile the caller asked for. "compat" used to be
+        // reported as "auto", which read as if the request had been ignored.
         if (!requestedLabel.empty())
         {
-            return requestedLabel == "compat"
-                       ? "auto"
-                       : requestedLabel;
+            return requestedLabel;
         }
 
         switch (profile)
