@@ -19,7 +19,7 @@ Corpus: `webcgm21-ts`, 353 CGM files.
 
 ## Profile: `webcgm`
 
-**353/353 converted (100.0%)** in 8.8s (32.7 MB of SVG).
+**353/353 converted (100.0%)** in 5.8s (33.0 MB of SVG).
 
 | Group | ok | error | malformed | no-output | timeout |
 | --- | --- | --- | --- | --- | --- |
@@ -32,7 +32,7 @@ Corpus: `webcgm21-ts`, 353 CGM files.
 
 ## Profile: `s1000d`
 
-**353/353 converted (100.0%)** in 9.2s (32.7 MB of SVG).
+**353/353 converted (100.0%)** in 5.9s (33.0 MB of SVG).
 
 | Group | ok | error | malformed | no-output | timeout |
 | --- | --- | --- | --- | --- | --- |
@@ -45,7 +45,7 @@ Corpus: `webcgm21-ts`, 353 CGM files.
 
 ## Profile: `compat`
 
-**353/353 converted (100.0%)** in 9.5s (32.7 MB of SVG).
+**353/353 converted (100.0%)** in 5.6s (33.0 MB of SVG).
 
 | Group | ok | error | malformed | no-output | timeout |
 | --- | --- | --- | --- | --- | --- |

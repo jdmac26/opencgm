@@ -8,17 +8,17 @@ the reference images, so text-heavy cases diverge even when the
 conversion is correct. Images are compared as 64x64 blurred greyscale to suppress glyph and antialiasing
 differences. Use this as a ranked list of cases to inspect by eye.
 
-Profile: `webcgm`. Compared: **78** of 79 reference-paired files.
+Profile: `webcgm`. Compared: **312** of 312 reference-paired files.
 
 Excluded groups: `dynamic10`. The dynamic tests exercise link navigation and picture replacement; their reference images show the state after that interaction, and frequently belong to the link's target file rather than the same-named source, so filename pairing compares unrelated drawings.
 
 | Statistic | Dissimilarity (0 = identical) |
 | --- | --- |
-| median | 0.0540 |
-| mean | 0.0700 |
-| 90th percentile | 0.1738 |
-| max | 0.2554 |
-| flagged (> 0.15) | 9 of 78 |
+| median | 0.0364 |
+| mean | 0.0514 |
+| 90th percentile | 0.1009 |
+| max | 0.4034 |
+| flagged (> 0.15) | 16 of 312 |
 
 ## Flagged for inspection
 
@@ -28,33 +28,34 @@ dissimilarity is more often font or placement.
 
 | Group | Test | Dissimilarity | ink out | ink ref |
 | --- | --- | --- | --- | --- |
-| `20tests` | `interpolated-interior-01` | 0.2554 | 0.279 | 0.275 |
-| `21tests` | `setGetFillOffset2` | 0.2400 | 0.297 | 0.283 |
-| `20tests` | `utf16-sf-apsid-01` | 0.2204 | 0.044 | 0.105 |
-| `21tests` | `setRedraw001` | 0.2154 | 0.177 | 0.178 |
-| `21tests` | `setView002` | 0.2055 | 0.151 | 0.261 |
-| `20tests` | `NUBS01` | 0.1934 | 0.065 | 0.040 |
-| `20tests` | `xcf-styles` | 0.1865 | 0.890 | 0.290 |
-| `20tests` | `interpolated-interior-02` | 0.1811 | 0.031 | 0.191 |
-| `20tests` | `region_clip` | 0.1707 | 0.011 | 0.071 |
+| `static10` | `CELARY07` | 0.4034 | 0.565 | 0.245 |
+| `20tests` | `interpolated-interior-01` | 0.2550 | 0.282 | 0.275 |
+| `20tests` | `utf16-sf-apsid-01` | 0.2430 | 0.099 | 0.105 |
+| `21tests` | `setGetFillOffset2` | 0.2389 | 0.307 | 0.283 |
+| `static10` | `CELARY06` | 0.2356 | 0.784 | 0.706 |
+| `static10` | `SPECMD02` | 0.2170 | 0.055 | 0.147 |
+| `21tests` | `setRedraw001` | 0.2149 | 0.191 | 0.178 |
+| `static10` | `PATTBL01` | 0.2112 | 0.328 | 0.156 |
+| `21tests` | `setView002` | 0.2070 | 0.161 | 0.261 |
+| `static10` | `bigcgm04` | 0.2063 | 0.238 | 0.183 |
+| `20tests` | `xcf-styles` | 0.2029 | 0.929 | 0.290 |
+| `20tests` | `interpolated-interior-02` | 0.1805 | 0.034 | 0.191 |
+| `static10` | `bigcgm05` | 0.1717 | 0.148 | 0.096 |
+| `20tests` | `region_clip` | 0.1696 | 0.011 | 0.071 |
+| `static10` | `SPECMD03` | 0.1604 | 0.054 | 0.092 |
+| `21tests` | `lineAnimation` | 0.1549 | 0.034 | 0.074 |
 
 ## Closest matches
 
 | Group | Test | Dissimilarity |
 | --- | --- | --- |
-| `20tests` | `AppStructure-interactivity` | 0.0055 |
-| `20tests` | `AppStructure-name` | 0.0056 |
-| `20tests` | `AppStructure-linkuri` | 0.0056 |
-| `20tests` | `AppStructure-viewcontext` | 0.0068 |
-| `21tests` | `setGetEdgeVisibility` | 0.0077 |
-| `20tests` | `AppStructure-screentip` | 0.0080 |
-| `20tests` | `AppStructure-region` | 0.0092 |
-| `21tests` | `setGetFillStyles2.0` | 0.0110 |
-| `21tests` | `aciLineEdgeTypeDef` | 0.0113 |
-| `21tests` | `setGetStrokeType` | 0.0138 |
-
-## Not compared
-
-| File | Reason |
-| --- | --- |
-| `AppStructure-visibility2.cgm` | rasterise failed: error: empty SVG bounds |
+| `static10` | `EMTPCT02` | 0.0000 |
+| `static10` | `EMTPCT01` | 0.0044 |
+| `20tests` | `AppAttContent` | 0.0044 |
+| `static10` | `LINCAP02` | 0.0048 |
+| `21tests` | `alphaEscape` | 0.0052 |
+| `20tests` | `AppStructure-name` | 0.0065 |
+| `20tests` | `AppStructure-interactivity` | 0.0065 |
+| `20tests` | `AppStructure-linkuri` | 0.0065 |
+| `static10` | `FIGURE03` | 0.0074 |
+| `static10` | `DGNTST05` | 0.0074 |
