@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -203,6 +204,17 @@ namespace
 
     fs::path getSamplesPath()
     {
+        // Same lookup as the other corpus tests: scripts/fetch-testdata.py
+        // tells users to point OPENCGM_SAMPLES_DIR at the corpus, and without
+        // honouring it these contracts could only ever skip.
+        if (const char *envDir = std::getenv("OPENCGM_SAMPLES_DIR"))
+        {
+            if (fs::exists(envDir))
+            {
+                return fs::absolute(envDir);
+            }
+        }
+
         const fs::path sourceFile(__FILE__);
         const auto samples = sourceFile.parent_path().parent_path() / "samples";
         return fs::exists(samples) ? samples : fs::path();

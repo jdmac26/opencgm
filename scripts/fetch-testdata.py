@@ -12,6 +12,10 @@ distributed under their own terms:
     which requires registration. It cannot be fetched unattended; this script
     prints instructions for it.
 
+  * Two golden fixtures use metafiles from the ATA iSpec 2200 GREXCHANGE
+    test materials, which are not publicly redistributable. This script only
+    reports whether they are present.
+
 Tests that need a corpus call GTEST_SKIP() when it is missing, so the suite is
 green without running this.
 
@@ -118,6 +122,29 @@ def fetch_webcgm(dest_root: Path) -> bool:
     return True
 
 
+ATA_DIRNAME = "ata30-cgms"
+ATA_FILES = ("allelm01.cgm", "arctst01.cgm")
+
+
+def check_ata(dest_root: Path) -> bool:
+    target = dest_root / ATA_DIRNAME
+    present = [
+        name for name in ATA_FILES
+        if target.exists() and any(p.name.lower() == name for p in target.iterdir())
+    ]
+    if len(present) == len(ATA_FILES):
+        print(f"ATA GREXCHANGE metafiles: present at {target}")
+        return True
+    print("ATA GREXCHANGE metafiles: not present (optional)")
+    print(
+        "  Two golden fixtures use these. They come from the ATA iSpec 2200\n"
+        "  GREXCHANGE test materials and are not publicly redistributable. If you\n"
+        f"  have them, place {', '.join(ATA_FILES)} in:\n"
+        f"    {target}"
+    )
+    return False
+
+
 def check_s1000d(dest_root: Path) -> bool:
     target = dest_root / S1000D_DIRNAME
     cgms = list(target.glob("*.CGM")) + list(target.glob("*.cgm")) if target.exists() else []
@@ -145,6 +172,8 @@ def main() -> int:
     fetch_webcgm(dest_root)
     print()
     complete = check_s1000d(dest_root)
+    print()
+    check_ata(dest_root)
 
     print()
     print("Point the tests at this directory:")

@@ -40,6 +40,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -422,8 +423,10 @@ def main() -> int:
     cases = load_cases(args.suite)
     print("{} static10 test cases".format(len(cases)))
 
+    # Without a worksheet the SVGs are only inspected, so keep them out of the
+    # caller's directory (a fixed ./.conformance-tmp was left in the checkout).
     workdir = (args.worksheet / "svg") if args.worksheet \
-        else Path("./.conformance-tmp")
+        else Path(tempfile.mkdtemp(prefix="opencgm-conformance-"))
     workdir.mkdir(parents=True, exist_ok=True)
 
     rows = []
@@ -449,6 +452,9 @@ def main() -> int:
 
         if i % 40 == 0:
             print("  {}/{}".format(i, len(cases)))
+
+    if not args.worksheet:
+        shutil.rmtree(workdir, ignore_errors=True)
 
     tally = collections.Counter()
     per_cat = collections.defaultdict(collections.Counter)
