@@ -3081,15 +3081,10 @@ namespace opencgm
                                    "CIRCULAR ARC CENTRE", 15);
                     }
 
-                    CGMPoint startVector = arcCmd->startDelta();
-                    CGMPoint endVector = arcCmd->endDelta();
-                    if (startVector.x() == endVector.x() && startVector.y() == endVector.y())
-                    {
-                        addWarning("Picture " + std::to_string(currentPictureIndex_ + 1) +
-                                       ": CIRCULAR ARC CENTRE - Degenerate: start and end vectors identical (zero sweep)",
-                                   "WebCGM-2.1 Degeneracy Rules",
-                                   "CIRCULAR ARC CENTRE", 15);
-                    }
+                    // Identical start and end vectors are not a degeneracy:
+                    // ISO/IEC 8632-1 draws a full circle, and WebCGM's
+                    // degeneracy rules (T.14.2) cover only a locus that
+                    // collapses to a point. DGNTST04 exercises exactly this.
                 }
             }
         }
