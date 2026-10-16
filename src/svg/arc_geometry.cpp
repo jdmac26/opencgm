@@ -2,6 +2,7 @@
 #include "opencgm/svg/svg_utils.h"
 #include "opencgm/svg_converter.h"
 #include <cmath>
+#include <sstream>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -152,8 +153,20 @@ std::optional<CircularArcResult> compute3PointArc(
     bool y_inverted,
     const CoordinateTransform& transform)
 {
-    // Compute center from 3 points
-    auto center_opt = computeCenterFrom3Points(p1, p2, p3);
+    // ISO/IEC 8632-1 7.6.13: when the start and end points coincide, the
+    // start and intermediate points are the ends of a diameter of a full
+    // circle. The bisector intersection below is undefined for that input
+    // (both chords lie on the same line), which used to drop the shape.
+    const bool startEqualsEnd = vectorsNearlyEqual(p1, p3);
+    std::optional<CGMPoint> center_opt;
+    if (startEqualsEnd) {
+        if (vectorsNearlyEqual(p1, p2)) {
+            return std::nullopt;  // All three points coincide
+        }
+        center_opt = CGMPoint((p1.x() + p2.x()) / 2.0, (p1.y() + p2.y()) / 2.0);
+    } else {
+        center_opt = computeCenterFrom3Points(p1, p2, p3);
+    }
     if (!center_opt) {
         return std::nullopt;  // Points are collinear
     }
@@ -227,6 +240,31 @@ std::optional<CircularArcResult> compute3PointArc(
     result.sweep_flag = sweep_flag;
 
     return result;
+}
+
+std::string fullEllipsePathData(
+    const CGMPoint& center_svg,
+    const CGMPoint& start_svg,
+    double rx,
+    double ry,
+    double rotation,
+    bool pie)
+{
+    // An ellipse is symmetric about its centre, so the far end of the
+    // diameter through start_svg is its reflection through center_svg.
+    CGMPoint opposite(2.0 * center_svg.x() - start_svg.x(),
+                      2.0 * center_svg.y() - start_svg.y());
+    std::ostringstream d;
+    d << "M " << start_svg.x() << " " << start_svg.y()
+      << " A " << rx << " " << ry << " " << rotation << " 0 1 "
+      << opposite.x() << " " << opposite.y()
+      << " A " << rx << " " << ry << " " << rotation << " 0 1 "
+      << start_svg.x() << " " << start_svg.y();
+    if (pie) {
+        d << " L " << center_svg.x() << " " << center_svg.y();
+    }
+    d << " Z";
+    return d.str();
 }
 
 } // namespace svg

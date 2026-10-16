@@ -187,6 +187,7 @@ class TextColour;
 class TextFontIndex;
 class TextPrecision;
 class CharacterExpansionFactor;
+class RestrictedTextType;
 class CharacterSpacing;
 class CharacterHeight;
 class CharacterOrientation;
@@ -415,6 +416,7 @@ public:
         edge_dash_continuation_(true),
         edge_dash_offset_(0.0),
         text_precision_(0),
+        restricted_text_type_(RestrictedTextTypeValue::BOXED_CAP),
         miter_limit_(10.0),
         opacity_(1.0) {}
 
@@ -467,6 +469,11 @@ public:
         text_h_align_ = h_align;
         text_v_align_ = v_align;
     }
+    void setContinuousAlignment(double h, double v) {
+        text_cont_h_ = h;
+        text_cont_v_ = v;
+    }
+    void setTextPath(TextPathType path) { text_path_ = path; }
     void setMarkerType(int type) { marker_type_ = type; }
     void setMarkerSize(double size) { marker_size_ = size; }
     void setMarkerColor(const Color& color) { marker_color_ = color; }
@@ -485,6 +492,8 @@ public:
     void setEdgeDashContinuation(bool cont) { edge_dash_continuation_ = cont; }
     void setEdgeDashOffset(double offset) { edge_dash_offset_ = offset; }
     void setTextPrecision(int precision) { text_precision_ = precision; }
+    void setRestrictedTextType(RestrictedTextTypeValue type) { restricted_text_type_ = type; }
+    void setMinimumDashUnit(double unit) { minimum_dash_unit_ = unit; }
     void setOpacity(double opacity) { opacity_ = std::max(0.0, std::min(1.0, opacity)); }
 
     double lineWidth() const { return line_width_; }
@@ -499,6 +508,9 @@ public:
     double originalTextHeight() const { return original_text_height_; }
     int textHAlign() const { return text_h_align_; }
     int textVAlign() const { return text_v_align_; }
+    double continuousHAlign() const { return text_cont_h_; }
+    double continuousVAlign() const { return text_cont_v_; }
+    TextPathType textPath() const { return text_path_; }
     int fillStyle() const { return fill_style_; }
     int hatchIndex() const { return hatch_index_; }
     bool edgeVisibility() const { return edge_visibility_; }
@@ -510,6 +522,7 @@ public:
     const std::string& fontFamily() const { return font_family_; }
     double characterSpacing() const { return character_spacing_; }
     double characterExpansion() const { return character_expansion_; }
+    RestrictedTextTypeValue restrictedTextType() const { return restricted_text_type_; }
     int patternIndex() const { return pattern_index_; }
 
     std::string getStrokeStyle() const {
@@ -665,10 +678,12 @@ private:
         // Edge types use same patterns as line types (CGM/ISO 8632-1)
         const char* base = "";
         switch (edge_type_) {
-            case 2:  base = "5,5";           break; // dash
-            case 3:  base = "2,2";           break; // dot
-            case 4:  base = "5,5,2,5";       break; // dash-dot
-            case 5:  base = "5,5,2,5,2,5";   break; // dash-dot-dot
+            // Proportions measured from the WebCGM suite's LINSTL02-05
+            // reference renderings: marks about three times their gaps.
+            case 2:  base = "6,2";                     break; // dash
+            case 3:  base = "1,1.2";                   break; // dot
+            case 4:  base = "6,1.25,0.85,1.25";        break; // dash-dot
+            case 5:  base = "6,1.25,0.85,1.25,0.85,1.25"; break; // dash-dot-dot
             // Extended registered edge types
             case 9:  base = "2,3";           break; // stitch
             case 10: base = "10,3,3,3";      break; // chain
@@ -679,7 +694,7 @@ private:
             case 15: base = "15,2,2,2,15";   break; // break long
             default: return "";
         }
-        return scaleDash(base, edge_width_);
+        return scaleDash(base, std::max(edge_width_, minimum_dash_unit_));
     }
     static const char* toSvgLineCap(LineCapIndicator indicator) {
         switch (indicator) {
@@ -744,10 +759,12 @@ private:
         // 15 = Break line long
         const char* base = "";
         switch (line_type_) {
-            case 2:  base = "5,5";           break; // dash
-            case 3:  base = "2,2";           break; // dot
-            case 4:  base = "5,5,2,5";       break; // dash-dot
-            case 5:  base = "5,5,2,5,2,5";   break; // dash-dot-dot
+            // Proportions measured from the WebCGM suite's LINSTL02-05
+            // reference renderings: marks about three times their gaps.
+            case 2:  base = "6,2";                     break; // dash
+            case 3:  base = "1,1.2";                   break; // dot
+            case 4:  base = "6,1.25,0.85,1.25";        break; // dash-dot
+            case 5:  base = "6,1.25,0.85,1.25,0.85,1.25"; break; // dash-dot-dot
             // Extended registered line types
             case 9:  base = "2,3";           break; // stitch
             case 10: base = "10,3,3,3";      break; // chain
@@ -758,7 +775,7 @@ private:
             case 15: base = "15,2,2,2,15";   break; // break long
             default: return "";              // solid or unknown
         }
-        return scaleDash(base, line_width_);
+        return scaleDash(base, std::max(line_width_, minimum_dash_unit_));
     }
 
     std::string colorToHex(const Color& color) const {
@@ -815,6 +832,9 @@ private:
     bool   marker_color_explicit_;
     int text_h_align_;  // 0=normal, 1=left, 2=center, 3=right
     int text_v_align_;  // 0=normal, 1=top, 2=cap, 3=half, 4=base, 5=bottom
+    double text_cont_h_ = 0.0;  // fractions used by continuous (4 / 6) alignment
+    double text_cont_v_ = 0.0;
+    TextPathType text_path_ = TextPathType::RIGHT;
     int marker_type_;   // 1=dot, 2=plus, 3=asterisk, 4=circle, 5=cross
     double marker_size_;
     Color marker_color_;
@@ -832,6 +852,16 @@ private:
     bool edge_dash_continuation_;
     double edge_dash_offset_;
     int text_precision_;
+    // ISO 8632-1 defaults RESTRICTED TEXT TYPE to basic, but WebCGM 2.1
+    // T.19.5/T.26.7 (and the version 1/2 metafiles that cannot carry the
+    // element) realise RESTRICTED TEXT as boxed-cap, which is what every
+    // WebCGM suite reference rendering shows.
+    RestrictedTextTypeValue restricted_text_type_;
+    // Floor for the length unit of the built-in dash patterns. They scale
+    // with line width, so a nominal-width line in a large picture got a
+    // dash cycle too short to read. The WebCGM reference renderings use a
+    // unit of roughly 1/250 of the picture's longest side.
+    double minimum_dash_unit_ = 0.0;
     double miter_limit_;
     double opacity_;
 };
@@ -1181,6 +1211,7 @@ private:
     void processTextFontIndex(TextFontIndex* cmd);
     void processTextPrecision(TextPrecision* cmd);
     void processCharacterExpansion(CharacterExpansionFactor* cmd);
+    void processRestrictedTextType(RestrictedTextType* cmd);
     void processCharacterSpacing(CharacterSpacing* cmd);
     void processCharacterHeight(CharacterHeight* cmd);
     void processCharacterOrientation(CharacterOrientation* cmd);
@@ -1280,7 +1311,36 @@ private:
         bool wrap_aps_substring = false;
         bool apply_clip = false;
         bool preserve_whitespace = true;
+        // When > 0, the run is fitted to this advance via SVG textLength
+        // (RESTRICTED TEXT boxed and justified types).
+        double text_length = 0.0;
+        bool text_length_spacing_only = false;
     };
+
+    // Text whose layout the plain <text> emission cannot express: TEXT PATH
+    // LEFT / UP / DOWN, or CONTINUOUS horizontal / vertical alignment.
+    struct PathTextLayout {
+        TextPathType path = TextPathType::RIGHT;
+        int h_align = 0;
+        int v_align = 0;
+        double cont_h = 0.0;
+        double cont_v = 0.0;
+        bool restricted = false;
+        double box_width_svg = 0.0;
+        double box_height_svg = 0.0;
+    };
+    static bool needsPathTextLayout(TextPathType path, int h_align, int v_align);
+    void emitPathText(TextEmitterParams params, const PathTextLayout& layout);
+
+    struct RestrictedTextFit {
+        double font_size_svg = 0.0;
+        double text_length = 0.0;   // 0 = natural width
+        bool spacing_only = false;  // lengthAdjust="spacing" (justified)
+    };
+    RestrictedTextFit fitRestrictedText(double natural_font_size_svg,
+                                        double natural_width_svg,
+                                        double box_width_svg,
+                                        double box_height_svg) const;
 
     void emitTextRun(const TextEmitterParams& params);
     void emitTextRunSingleLine(const TextEmitterParams& params);
@@ -1327,6 +1387,7 @@ private:
     double abstract_line_width_unit_;
     double abstract_edge_width_unit_;
     double nominal_line_width_svg_;
+    double minimum_dash_unit_svg_ = 0.0;
     double nominal_edge_width_svg_;
     SpecificationMode scaling_mode_;
     double metric_scale_factor_;
@@ -1537,6 +1598,9 @@ private:
     std::vector<PendingTextSegment> pending_text_segments_;  // Segments with individual attributes
     int pending_text_h_align_;
     int pending_text_v_align_;
+    TextPathType pending_text_path_ = TextPathType::RIGHT;
+    double pending_text_cont_h_ = 0.0;
+    double pending_text_cont_v_ = 0.0;
     bool has_last_text_position_;
     CGMPoint last_text_position_;
     double pending_text_rotation_deg_;

@@ -3,6 +3,7 @@
 
 #include "opencgm/cgm_point.h"
 #include <optional>
+#include <string>
 
 namespace opencgm {
 
@@ -79,6 +80,19 @@ std::optional<CircularArcResult> compute3PointArc(
     bool x_inverted,
     bool y_inverted,
     const CoordinateTransform& transform);
+
+// SVG path data for a complete ellipse (or circle) traced from start_svg and
+// back, as two half-arcs through the point opposite start_svg. With pie set,
+// a radius segment to center_svg is appended: a closed arc with PIE closure
+// whose start and end coincide still draws that line (ISO/IEC 8632-1 7.6.14).
+// rotation is the ellipse's x-axis rotation in degrees, as for SVG arcs.
+std::string fullEllipsePathData(
+    const CGMPoint& center_svg,
+    const CGMPoint& start_svg,
+    double rx,
+    double ry,
+    double rotation,
+    bool pie);
 
 } // namespace svg
 } // namespace opencgm
