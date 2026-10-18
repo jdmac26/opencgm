@@ -803,9 +803,17 @@ private:
     RestrictedTextTypeValue type_;
 };
 
-// Element ID 43: INTERPOLATED INTERIOR
+// Element ID 43: INTERPOLATED INTERIOR (ISO/IEC 8632-1 7.7.43, -3 8.7.43)
+//
+// Encoded as: style (IX); reference geometry as size-specification pairs, one
+// for PARALLEL (the gradient vector) and two otherwise (the conjugate radii of
+// an ELLIPTICAL gradient); the number of stage designators (I) and the
+// designators (R); then the colours: one more than the designators, or
+// exactly three for TRIANGULAR. Geometry is relative to FILL REFERENCE POINT.
 class InterpolatedInterior : public Command {
 public:
+    enum Style { PARALLEL = 1, ELLIPTICAL = 2, TRIANGULAR = 3 };
+
     explicit InterpolatedInterior(CGMFile* container);
 
     void readFromBinary(IBinaryReader& reader) override;
@@ -814,18 +822,15 @@ public:
     std::string toString() const override;
 
     int style() const { return style_; }
-    double hatchDirectionX() const { return hatchDirectionX_; }
-    double hatchDirectionY() const { return hatchDirectionY_; }
+    // Size-specification pairs, interpreted per INTERIOR STYLE SPECIFICATION MODE.
     const std::vector<CGMPoint>& referenceGeometry() const { return referenceGeometry_; }
-    const std::vector<int>& stageDesignators() const { return stageDesignators_; }
+    const std::vector<double>& stageDesignators() const { return stageDesignators_; }
     const std::vector<CGMColor>& colors() const { return colors_; }
 
 private:
     int style_;
-    double hatchDirectionX_;
-    double hatchDirectionY_;
     std::vector<CGMPoint> referenceGeometry_;
-    std::vector<int> stageDesignators_;
+    std::vector<double> stageDesignators_;
     std::vector<CGMColor> colors_;
 };
 

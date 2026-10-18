@@ -15,10 +15,10 @@ Excluded groups: `dynamic10`. The dynamic tests exercise link navigation and pic
 | Statistic | Dissimilarity (0 = identical) |
 | --- | --- |
 | median | 0.0364 |
-| mean | 0.0514 |
-| 90th percentile | 0.1009 |
+| mean | 0.0494 |
+| 90th percentile | 0.0967 |
 | max | 0.4034 |
-| flagged (> 0.15) | 16 of 312 |
+| flagged (> 0.15) | 13 of 312 |
 
 ## Flagged for inspection
 
@@ -29,9 +29,7 @@ dissimilarity is more often font or placement.
 | Group | Test | Dissimilarity | ink out | ink ref |
 | --- | --- | --- | --- | --- |
 | `static10` | `CELARY07` | 0.4034 | 0.565 | 0.245 |
-| `20tests` | `interpolated-interior-01` | 0.2550 | 0.282 | 0.275 |
 | `20tests` | `utf16-sf-apsid-01` | 0.2430 | 0.099 | 0.105 |
-| `21tests` | `setGetFillOffset2` | 0.2389 | 0.307 | 0.283 |
 | `static10` | `CELARY06` | 0.2356 | 0.784 | 0.706 |
 | `static10` | `SPECMD02` | 0.2170 | 0.055 | 0.147 |
 | `21tests` | `setRedraw001` | 0.2149 | 0.191 | 0.178 |
@@ -39,7 +37,6 @@ dissimilarity is more often font or placement.
 | `21tests` | `setView002` | 0.2070 | 0.161 | 0.261 |
 | `static10` | `bigcgm04` | 0.2063 | 0.238 | 0.183 |
 | `20tests` | `xcf-styles` | 0.2029 | 0.929 | 0.290 |
-| `20tests` | `interpolated-interior-02` | 0.1805 | 0.034 | 0.191 |
 | `static10` | `bigcgm05` | 0.1717 | 0.148 | 0.096 |
 | `20tests` | `region_clip` | 0.1696 | 0.011 | 0.071 |
 | `static10` | `SPECMD03` | 0.1604 | 0.054 | 0.092 |

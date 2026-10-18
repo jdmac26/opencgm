@@ -221,49 +221,55 @@ std::string RestrictedTextType::toString() const {
 
 InterpolatedInterior::InterpolatedInterior(CGMFile* container)
     : Command(CommandConstructorArguments(ClassCode::AttributeElements, 43, container)),
-      style_(0), hatchDirectionX_(0.0), hatchDirectionY_(0.0) {}
+      style_(0) {}
+
+namespace {
+SpecificationMode interiorStyleMode(const CGMFile* container) {
+    return container ? container->interiorStyleSpecificationMode() : SpecificationMode::ABS;
+}
+}
 
 void InterpolatedInterior::readFromBinary(IBinaryReader& reader) {
+    // The earlier reader took the reference geometry for a "hatch direction",
+    // then read a point count, points, and integer stage designators that the
+    // encoding does not contain, so every field after the style was garbage.
+    const SpecificationMode mode = interiorStyleMode(container_);
     style_ = reader.readIndex();
-    hatchDirectionX_ = reader.readVdc();
-    hatchDirectionY_ = reader.readVdc();
 
-    // Read number of reference geometry points
-    int nRefGeo = reader.readInt();
     referenceGeometry_.clear();
-    referenceGeometry_.reserve(nRefGeo);
-    for (int i = 0; i < nRefGeo; i++) {
-        referenceGeometry_.push_back(reader.readPoint());
+    const int pairs = (style_ == PARALLEL) ? 1 : 2;
+    for (int i = 0; i < pairs && reader.hasMoreData(); ++i) {
+        const double x = reader.readSizeSpecification(mode);
+        const double y = reader.readSizeSpecification(mode);
+        referenceGeometry_.emplace_back(x, y);
     }
 
-    // Read stage designators
+    // Counts come from the file, so stop at the end of the element rather
+    // than trusting them.
     stageDesignators_.clear();
-    int nStage = reader.readInt();
-    stageDesignators_.reserve(nStage);
-    for (int i = 0; i < nStage; i++) {
-        stageDesignators_.push_back(reader.readInt());
+    const int stages = reader.hasMoreData() ? reader.readInt() : 0;
+    for (int i = 0; i < stages && reader.hasMoreData(); ++i) {
+        stageDesignators_.push_back(reader.readReal());
     }
 
-    // Read colors
     colors_.clear();
-    while (reader.hasMoreData()) {
+    const int colours = (style_ == TRIANGULAR) ? 3 : stages + 1;
+    for (int i = 0; i < colours && reader.hasMoreData(); ++i) {
         colors_.push_back(reader.readColor());
     }
 }
 
 void InterpolatedInterior::writeAsBinary(IBinaryWriter& writer) {
+    const SpecificationMode mode = interiorStyleMode(container_);
     writer.writeIndex(style_);
-    writer.writeVdc(hatchDirectionX_);
-    writer.writeVdc(hatchDirectionY_);
-
-    writer.writeInt(static_cast<int>(referenceGeometry_.size()));
-    for (const auto& point : referenceGeometry_) {
-        writer.writePoint(point);
+    for (const auto& pair : referenceGeometry_) {
+        writer.writeSizeSpecification(pair.x(), mode);
+        writer.writeSizeSpecification(pair.y(), mode);
     }
 
     writer.writeInt(static_cast<int>(stageDesignators_.size()));
-    for (int designator : stageDesignators_) {
-        writer.writeInt(designator);
+    for (double designator : stageDesignators_) {
+        writer.writeReal(designator);
     }
 
     for (const auto& color : colors_) {
@@ -273,16 +279,13 @@ void InterpolatedInterior::writeAsBinary(IBinaryWriter& writer) {
 
 void InterpolatedInterior::writeAsClearText(IClearTextWriter& writer) {
     std::ostringstream oss;
-    oss << " INTERPINTERIOR " << style_;
-    oss << " (" << hatchDirectionX_ << "," << hatchDirectionY_ << ")";
-
-    oss << " " << referenceGeometry_.size();
-    for (const auto& point : referenceGeometry_) {
-        oss << " (" << point.x() << "," << point.y() << ")";
+    oss << " INTERPINT " << style_;
+    for (const auto& pair : referenceGeometry_) {
+        oss << " " << pair.x() << " " << pair.y();
     }
 
     oss << " " << stageDesignators_.size();
-    for (int designator : stageDesignators_) {
+    for (double designator : stageDesignators_) {
         oss << " " << designator;
     }
 
@@ -302,11 +305,15 @@ void InterpolatedInterior::writeAsClearText(IClearTextWriter& writer) {
 
 std::string InterpolatedInterior::toString() const {
     std::ostringstream oss;
-    oss << "InterpolatedInterior[style=" << style_
-        << ", hatchDir=(" << hatchDirectionX_ << "," << hatchDirectionY_ << ")"
-        << ", refGeo=" << referenceGeometry_.size()
-        << ", stages=" << stageDesignators_.size()
-        << ", colors=" << colors_.size() << "]";
+    oss << "InterpolatedInterior[style=" << style_ << ", geometry=";
+    for (const auto& pair : referenceGeometry_) {
+        oss << "(" << pair.x() << "," << pair.y() << ")";
+    }
+    oss << ", stages=";
+    for (double designator : stageDesignators_) {
+        oss << designator << " ";
+    }
+    oss << ", colors=" << colors_.size() << "]";
     return oss.str();
 }
 
