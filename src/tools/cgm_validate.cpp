@@ -23,9 +23,11 @@ void printUsage(const char* progName) {
     std::cout << "                          (default: auto-detect)\n";
     std::cout << "  -j, --json              Output JSON format\n";
     std::cout << "  -v, --verbose           Verbose output\n";
+    std::cout << "  -d, --dump              List every element instead of validating\n";
     std::cout << "  -h, --help              Show this help\n\n";
     std::cout << "Examples:\n";
     std::cout << "  " << progName << " diagram.cgm\n";
+    std::cout << "  " << progName << " --dump diagram.cgm > diagram-elements.txt\n";
     std::cout << "  " << progName << " --profile ata29 illustration.cgm\n";
     std::cout << "  " << progName << " --json --profile s1000d ICN-*.CGM\n";
 }
@@ -53,6 +55,7 @@ int main(int argc, char* argv[]) {
     ProfileDetector::DetectionResult autoDetection{ProfileType::UNKNOWN, "", false};
     bool jsonOutput = false;
     bool verbose = false;
+    bool dump = false;
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -76,6 +79,8 @@ int main(int argc, char* argv[]) {
             jsonOutput = true;
         } else if (arg == "-v" || arg == "--verbose") {
             verbose = true;
+        } else if (arg == "-d" || arg == "--dump") {
+            dump = true;
         } else if (arg[0] != '-') {
             cgmFile = arg;
         } else {
@@ -101,6 +106,18 @@ int main(int argc, char* argv[]) {
 
         if (verbose) {
             std::cout << "Loaded " << cgm.commands().size() << " commands\n";
+        }
+
+        // One line per element, ISO 8632 class/ID first. Lets someone report a
+        // conversion bug from a file they cannot share; note it still includes
+        // text strings and APS names, so it should be read before posting.
+        if (dump) {
+            size_t index = 0;
+            for (const auto& command : cgm.commands()) {
+                std::cout << index++ << "\t" << static_cast<int>(command->elementClass())
+                          << "/" << command->elementId() << "\t" << command->toString() << "\n";
+            }
+            return 0;
         }
 
         // Detect or use specified profile
