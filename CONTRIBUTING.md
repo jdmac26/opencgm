@@ -11,7 +11,8 @@ A good report includes:
 
 1. The CGM file, or a minimal reduction of it. If the file cannot be shared,
    `cgm_validate --dump` output plus a description of the affected element is
-   usually enough to work from.
+   usually enough to work from. The dump lists every element but still
+   includes text strings and structure names, so read it before posting.
 2. The command line used, including the `--profile`.
 3. What the output looks like versus what it should look like.
 4. The producing application, if known — `IsoDraw`, `Arbortext`, `CorelDRAW`,
@@ -24,17 +25,20 @@ reduction is always preferable.
 
 ## Development
 
+Tests are off by default (enabling them downloads GoogleTest), so turn them on:
+
 ```bash
-cmake -B build
-cmake --build build
-ctest --test-dir build
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+cmake --build build --config Release
+ctest --test-dir build -C Release
 ```
 
 Corpus-driven tests need sample data, which is not vendored:
 
 ```bash
 python scripts/fetch-testdata.py
-export OPENCGM_SAMPLES_DIR=$PWD/testdata
+export OPENCGM_SAMPLES_DIR=$PWD/testdata         # bash
+$env:OPENCGM_SAMPLES_DIR = "$PWD\testdata"       # PowerShell
 ```
 
 Tests requiring a corpus skip cleanly when it is absent, so a bare `ctest` run

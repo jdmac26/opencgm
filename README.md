@@ -112,7 +112,8 @@ version.
 
 `cgm_validate input.cgm` checks a metafile against a profile (WebCGM 2.1,
 ATA GREXCHANGE, S1000D, or ISO 8632; auto-detected by default) without
-converting it. Add `--json` for machine-readable output.
+converting it. Add `--json` for machine-readable output, or use `--dump` to
+list every element with its ISO 8632 class and ID.
 
 ### Library
 

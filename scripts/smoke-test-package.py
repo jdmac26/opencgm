@@ -188,6 +188,9 @@ def main() -> int:
         val = subprocess.run([str(validate), str(cgm)], capture_output=True, text=True)
         if "Summary" not in val.stdout:
             problems.append(f"cgm_validate did not produce a report (exit {val.returncode})")
+        dump = subprocess.run([str(validate), "--dump", str(cgm)], capture_output=True, text=True)
+        if dump.returncode != 0 or "4/12\tCircle" not in dump.stdout:
+            problems.append(f"cgm_validate --dump did not list the circle (exit {dump.returncode})")
 
     if problems:
         print("\nFAILED", file=sys.stderr)
