@@ -157,6 +157,7 @@ class PatternSize;
 class PatternIndex;
 class HatchStyleDefinition;
 class FillReferencePoint;
+class InterpolatedInterior;
 class LineWidthSpecificationMode;
 class EdgeWidthSpecificationMode;
 class TransparentCellColour;
@@ -1194,6 +1195,12 @@ private:
     void processPatternTable(PatternTable* cmd);
     void processPatternSize(PatternSize* cmd);
     void processFillReferencePoint(FillReferencePoint* cmd);
+    void processInterpolatedInterior(InterpolatedInterior* cmd);
+    // Emits the SVG gradient for the current INTERPOLATED INTERIOR into <defs>
+    // and returns its id, or "" when it has no SVG equivalent (TRIANGULAR, or
+    // too little data), in which case the caller approximates.
+    std::string ensureInterpolatedFill();
+    Color averageInterpolatedColour() const;
     void processEdgeColor(EdgeColour* cmd);
     void processEdgeWidth(EdgeWidth* cmd);
     void processEdgeType(EdgeType* cmd);
@@ -1254,6 +1261,9 @@ private:
     void resetPictureState();
     Color applyColourValueExtent(const Color& value) const;
     static const char* interiorStyleName(int style);
+    // Every INTERIOR STYLE except HOLLOW (0) and EMPTY (4) paints the interior,
+    // so every one of them must go through getFillAttributeForCurrentStyle().
+    static bool paintsInterior(int style) { return style != 0 && style != 4; }
 
     // Figure helpers
     void renderFigure();
@@ -1520,6 +1530,18 @@ private:
     std::unordered_map<std::string, std::string> hatch_pattern_ids_;
     std::unordered_map<int, std::string> pattern_fill_ids_;
     std::unordered_map<int, PatternTableData> pattern_tables_;
+
+    // INTERPOLATED INTERIOR, applied when INTERIOR STYLE is 6. Colours are
+    // resolved when the attribute is set, as FILL COLOUR's are.
+    struct InterpolatedFill {
+        bool set = false;
+        int style = 0;
+        std::vector<CGMPoint> geometry;   // VDC, relative to FILL REFERENCE POINT
+        std::vector<double> stages;
+        std::vector<Color> colours;
+    };
+    InterpolatedFill interpolated_fill_;
+    std::unordered_map<std::string, std::string> gradient_fill_ids_;
     // PATTERN SIZE handling is hybrid for compatibility with both common
     // metafile authoring conventions:
     //   - Per-table: many CGMs emit PATTERN TABLE N then PATTERN SIZE,

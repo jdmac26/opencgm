@@ -3428,6 +3428,9 @@ namespace opencgm
             case 34: // COLOUR TABLE (ISO 8632-3: Element 34)
                 processColourTable(dispatchCast<ColourTable, ClassCode::AttributeElements, 34>(cmd));
                 break;
+            case 43: // INTERPOLATED INTERIOR
+                processInterpolatedInterior(dispatchCast<InterpolatedInterior, ClassCode::AttributeElements, 43>(cmd));
+                break;
             case 37: // LINE CAP
                 processLineCap(dispatchCast<LineCap, ClassCode::AttributeElements, 37>(cmd));
                 break;
@@ -3977,7 +3980,7 @@ namespace opencgm
         }
 
         std::string fillAttr;
-        if (fillStyle == 1 || fillStyle == 2 || fillStyle == 3)
+        if (paintsInterior(fillStyle))
         {
             fillAttr = getFillAttributeForCurrentStyle();
             closeOpenDefs();
@@ -4000,7 +4003,7 @@ namespace opencgm
 
         svg_output_ << clipPathAttribute();
 
-        if (fillStyle == 1 || fillStyle == 2 || fillStyle == 3)
+        if (paintsInterior(fillStyle))
         {
             if (effectiveEdgeVis)
             {
@@ -4069,7 +4072,7 @@ namespace opencgm
         int fillStyle = current_style_.fillStyle();
         bool edgeVis = current_style_.edgeVisibility();
         std::string fillAttr;
-        if (fillStyle == 1 || fillStyle == 2 || fillStyle == 3)
+        if (paintsInterior(fillStyle))
         {
             fillAttr = getFillAttributeForCurrentStyle();
             closeOpenDefs();
@@ -4089,12 +4092,12 @@ namespace opencgm
 
         // Ellipses are filled area primitives in CGM, so they use edge attributes (not line attributes)
         // Standard CGM rendering per specification:
-        // - SOLID (1) or HATCH (3): Render with fill
         // - HOLLOW (0), EMPTY (4): Render without fill
+        // - every other style: render with the fill getFillAttributeForCurrentStyle()
+        //   resolves, which also announces any style it can only approximate
         // - EdgeVisibility determines whether to show stroke
-        if (fillStyle == 1 || fillStyle == 2 || fillStyle == 3)
+        if (paintsInterior(fillStyle))
         {
-            // SOLID or HATCH - render as filled
             if (edgeVis)
             {
                 // Fill with stroke
@@ -6326,6 +6329,118 @@ namespace opencgm
         has_fill_reference_point_ = true;
         pattern_fill_ids_.clear();
         hatch_pattern_ids_.clear();
+    }
+
+    void SVGConverter::processInterpolatedInterior(InterpolatedInterior *cmd)
+    {
+        if (!cmd)
+            return;
+
+        interpolated_fill_.set = true;
+        interpolated_fill_.style = cmd->style();
+        interpolated_fill_.geometry = cmd->referenceGeometry();
+        interpolated_fill_.stages = cmd->stageDesignators();
+        interpolated_fill_.colours.clear();
+        for (const auto &colour : cmd->colors())
+        {
+            interpolated_fill_.colours.push_back(
+                resolveColor(colour, ColorRole::Fill, "INTERPOLATED INTERIOR"));
+        }
+    }
+
+    Color SVGConverter::averageInterpolatedColour() const
+    {
+        const auto &colours = interpolated_fill_.colours;
+        if (colours.empty())
+            return current_style_.fillColor();
+        double r = 0.0, g = 0.0, b = 0.0;
+        for (const auto &c : colours)
+        {
+            r += c.r;
+            g += c.g;
+            b += c.b;
+        }
+        const double n = static_cast<double>(colours.size());
+        return Color(static_cast<uint8_t>(std::lround(r / n)),
+                     static_cast<uint8_t>(std::lround(g / n)),
+                     static_cast<uint8_t>(std::lround(b / n)));
+    }
+
+    std::string SVGConverter::ensureInterpolatedFill()
+    {
+        const auto &fill = interpolated_fill_;
+        const bool parallel = fill.style == InterpolatedInterior::PARALLEL;
+        const bool elliptical = fill.style == InterpolatedInterior::ELLIPTICAL;
+        if (!fill.set || !(parallel || elliptical) ||
+            fill.geometry.size() < (parallel ? 1u : 2u) ||
+            fill.colours.size() < 2 || fill.stages.empty())
+        {
+            return {};
+        }
+
+        // Stage designators place colour i+1 at that fraction of the
+        // reference geometry, colour 0 sitting on the FILL REFERENCE POINT
+        // (ISO/IEC 8632-1 7.7.43). Scale the geometry out to the last stage
+        // so SVG offsets stay within 0..1.
+        const double extent = fill.stages.back();
+        if (!(extent > 0.0) || !std::isfinite(extent))
+            return {};
+
+        // Geometry is in size-specification units; treated as VDC, which is
+        // what the default ABSOLUTE INTERIOR STYLE SPECIFICATION MODE means.
+        const CGMPoint origin = transform_.transformPoint(fill_reference_point_);
+        auto vectorSvg = [&](const CGMPoint &v) {
+            const CGMPoint end = transform_.transformPoint(CGMPoint(
+                fill_reference_point_.x() + v.x() * extent,
+                fill_reference_point_.y() + v.y() * extent));
+            return CGMPoint(end.x() - origin.x(), end.y() - origin.y());
+        };
+
+        const char *tag = parallel ? "linearGradient" : "radialGradient";
+        std::ostringstream geometry;
+        if (parallel)
+        {
+            const CGMPoint d = vectorSvg(fill.geometry[0]);
+            geometry << " gradientUnits=\"userSpaceOnUse\" x1=\"" << origin.x()
+                     << "\" y1=\"" << origin.y() << "\" x2=\"" << origin.x() + d.x()
+                     << "\" y2=\"" << origin.y() + d.y() << "\"";
+        }
+        else
+        {
+            // The two conjugate radii map the unit circle onto the gradient
+            // ellipse, which also covers non-circular and rotated cases that
+            // a plain radialGradient r cannot.
+            const CGMPoint u = vectorSvg(fill.geometry[0]);
+            const CGMPoint v = vectorSvg(fill.geometry[1]);
+            geometry << " gradientUnits=\"userSpaceOnUse\" cx=\"0\" cy=\"0\" r=\"1\""
+                     << " gradientTransform=\"matrix(" << u.x() << " " << u.y() << " "
+                     << v.x() << " " << v.y() << " " << origin.x() << " " << origin.y() << ")\"";
+        }
+
+        std::ostringstream stops;
+        const size_t count = std::min(fill.colours.size(), fill.stages.size() + 1);
+        for (size_t i = 0; i < count; ++i)
+        {
+            const double offset = (i == 0) ? 0.0 : std::clamp(fill.stages[i - 1] / extent, 0.0, 1.0);
+            stops << "      <stop offset=\"" << offset << "\" stop-color=\""
+                  << colorToHexString(fill.colours[i]) << "\"/>\n";
+        }
+
+        const std::string key = tag + geometry.str() + stops.str();
+        auto cached = gradient_fill_ids_.find(key);
+        if (cached != gradient_fill_ids_.end())
+            return cached->second;
+
+        if (!defs_open_)
+        {
+            svg_output_ << "  <defs>\n";
+            defs_open_ = true;
+        }
+        const std::string id = "cgm-gradient-" + std::to_string(++pattern_counter_);
+        svg_output_ << "    <" << tag << " id=\"" << id << "\"" << geometry.str() << ">\n"
+                    << stops.str() << "    </" << tag << ">\n";
+        gradient_fill_ids_[key] = id;
+        return id;
     }
 
     void SVGConverter::processEdgeWidth(EdgeWidth *cmd)
@@ -9260,6 +9375,33 @@ namespace opencgm
             }
             break;
         }
+        case 6: // INTERPOLATED
+        {
+            std::string gradientId = ensureInterpolatedFill();
+            if (!gradientId.empty())
+            {
+                return std::string("fill=\"url(#") + gradientId + ")\" ";
+            }
+            // TRIANGULAR has no SVG gradient, and a malformed element may lack
+            // stages or colours. The average of the colours is a far closer
+            // stand-in than the current fill colour, which is what used to
+            // turn interpolated-interior-01 into a solid black square.
+            if (interpolated_fill_.set && !interpolated_fill_.colours.empty())
+            {
+                if (unsupported_fill_styles_warned_.insert(fs).second)
+                {
+                    std::cerr << "[svg] INTERPOLATED INTERIOR style " << interpolated_fill_.style
+                              << " has no SVG gradient equivalent; filling with the average of its colours\n";
+                }
+                return std::string("fill=\"") + colorToHexString(averageInterpolatedColour()) + "\" ";
+            }
+            if (unsupported_fill_styles_warned_.insert(fs).second)
+            {
+                std::cerr << "[svg] INTERIOR STYLE 6 (INTERPOLATED) has no INTERPOLATED INTERIOR to apply;"
+                          << " filling solid instead\n";
+            }
+            break;
+        }
         default:
             // SOLID (1) also lands here and is genuinely handled by getFillStyle() - it is
             // not a fallback and must not warn. Everything else is: 5 (geometric pattern),
@@ -9376,6 +9518,8 @@ namespace opencgm
         fill_reference_point_ = CGMPoint(0.0, 0.0);
         has_fill_reference_point_ = false;
         last_defined_pattern_index_ = 1;
+        interpolated_fill_ = InterpolatedFill{};
+        gradient_fill_ids_.clear();
     }
 
     void SVGConverter::resetPictureState()
