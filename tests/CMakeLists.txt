@@ -9,8 +9,17 @@ FetchContent_Declare(
     GIT_TAG v1.14.0
 )
 
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# For Windows: make GoogleTest use the same C runtime as the engine. Forcing the
+# shared CRT under OPENCGM_STATIC_MSVC_RUNTIME would mix /MD and /MT and fail
+# to link.
+if(OPENCGM_STATIC_MSVC_RUNTIME)
+    set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
+else()
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+endif()
+# GoogleTest is a test dependency only; keep it out of `cmake --install`, which
+# is how release archives are staged.
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
