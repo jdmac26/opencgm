@@ -23,6 +23,41 @@ support for WebCGM 2.1 and S1000D.
 - Ships a C API for embedding, a CLI, and a validation tool
 - Round-trips CGM → CGM as well as converting
 
+## Download
+
+Prebuilt binaries for Windows and Linux are on the
+[releases page](https://github.com/jdmac26/opencgm/releases/latest). You only
+need to build from source to change the code or to target another platform.
+
+| Archive | Runs on |
+| --- | --- |
+| `opencgm-windows-x64.zip` | 64-bit Windows 10 or later. Nothing else to install. |
+| `opencgm-linux-x64.tar.gz` | 64-bit Linux with glibc 2.35 or later (Ubuntu 22.04+, Debian 12+). |
+
+Unpack the archive and run the converter from its `bin` folder:
+
+```powershell
+# Windows
+.\opencgm-windows-x64\bin\opencgm_cli.exe input.cgm output.svg
+```
+
+```bash
+# Linux
+tar xzf opencgm-linux-x64.tar.gz
+./opencgm-linux-x64/bin/opencgm_cli input.cgm output.svg
+```
+
+Each archive also contains `include/` and `lib/` for embedding the library.
+To check a download against the published checksums:
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS            # Linux
+```
+
+```powershell
+Get-FileHash opencgm-windows-x64.zip -Algorithm SHA256   # Windows: compare with SHA256SUMS
+```
+
 ## Building
 
 Requires CMake 3.15+, a C++17 compiler, and optionally

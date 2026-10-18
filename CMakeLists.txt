@@ -87,6 +87,23 @@ option(BUILD_SHARED_LIBS "Build shared library" ON)
 option(BUILD_TESTS "Build tests (fetches GoogleTest)" OFF)
 option(BUILD_DEBUG_TOOLS "Build debug and diagnostic tools (development only)" OFF)
 option(ENABLE_SKIA_RENDERER "Build with native Skia renderer support" OFF)
+# Release archives link the C/C++ runtime statically so they run on a Windows
+# machine without the Visual C++ Redistributable. Off by default: an embedder
+# loading opencgm.dll into its own process usually wants the shared runtime.
+option(OPENCGM_STATIC_MSVC_RUNTIME "Link the MSVC runtime statically (/MT)" OFF)
+
+if(MSVC AND OPENCGM_STATIC_MSVC_RUNTIME)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    # FetchContent dependencies (GoogleTest) declare an older minimum CMake,
+    # which would leave CMP0091 unset and ignore the setting above.
+    set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
+endif()
+
+# Installed binaries find libopencgm.so in ../lib relative to themselves, so an
+# unpacked release archive runs without LD_LIBRARY_PATH or a system install.
+if(UNIX AND NOT APPLE)
+    set(CMAKE_INSTALL_RPATH "\$ORIGIN/../lib")
+endif()
 
 # Skia integration (optional)
 if(ENABLE_SKIA_RENDERER)
