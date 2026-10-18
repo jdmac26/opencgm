@@ -20,7 +20,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # The oldest supported runner: binaries need the glibc they were
+          # built against or newer, and 22.04's 2.35 covers far more systems
+          # than ubuntu-latest's.
+          - os: ubuntu-22.04
             name: linux-x64
             archive: tar.gz
           - os: windows-latest
@@ -30,8 +33,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A tag that disagrees with VERSION would publish binaries reporting the
+      # wrong version under the tag's name.
+      - name: Check tag matches VERSION
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match VERSION ($version)"
+            exit 1
+          fi
+
+      # Static MSVC runtime: the Windows archive must run without the Visual
+      # C++ Redistributable installed. Ignored on Linux.
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DOPENCGM_STATIC_MSVC_RUNTIME=ON
 
       - name: Build
         run: cmake --build build --config Release
@@ -40,21 +57,18 @@ jobs:
       - name: Test
         run: ctest --test-dir build --build-config Release --output-on-failure
 
+      # Stage through the install rules rather than copying from the build
+      # tree: copying by name missed libopencgm.so (built into lib/, not bin/),
+      # so the v1.5.0 Linux archive could not start.
       - name: Stage artifacts
         shell: bash
         run: |
           set -e
           out="opencgm-${{ matrix.name }}"
-          mkdir -p "$out"
-          # Multi-config generators nest binaries under a config directory.
-          for d in build/bin build/bin/Release; do
-            [ -d "$d" ] && find "$d" -maxdepth 1 -type f \
-              \( -name 'opencgm*' -o -name 'cgm_validate*' \) \
-              ! -name '*test*' -exec cp {} "$out/" \; || true
-          done
+          cmake --install build --config Release --prefix "$out"
           cp LICENSE NOTICE THIRD-PARTY-NOTICES.md README.md "$out/"
           echo "--- staged ---"
-          ls -l "$out"
+          find "$out" -path "$out/include" -prune -o -type f -print | sort
 
       - name: Archive (tar.gz)
         if: matrix.archive == 'tar.gz'
@@ -64,6 +78,22 @@ jobs:
         if: matrix.archive == 'zip'
         shell: pwsh
         run: Compress-Archive -Path opencgm-${{ matrix.name }} -DestinationPath opencgm-${{ matrix.name }}.zip
+
+      # Test what users download: unpack the archive where the build tree
+      # cannot leak in, then convert a file and check runtime dependencies.
+      - name: Smoke-test the archive
+        shell: bash
+        run: |
+          set -e
+          mkdir smoke
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            (cd smoke && 7z x -bso0 "../opencgm-${{ matrix.name }}.zip")
+          else
+            tar xzf "opencgm-${{ matrix.name }}.tar.gz" -C smoke
+          fi
+          py="$(command -v python3 || command -v python)"
+          "$py" scripts/smoke-test-package.py "smoke/opencgm-${{ matrix.name }}" \
+            --expect-version "$(tr -d '[:space:]' < VERSION)"
 
       - uses: actions/upload-artifact@v4
         with:
