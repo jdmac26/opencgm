@@ -43,9 +43,13 @@ TEST(SvgFills, UnrenderableInteriorStyleIsConsistentAcrossPrimitives)
     b.element(5, 22, B::i16(5));  // INTERIOR STYLE: geometric pattern
     drawShapes(b);
 
-    ::testing::internal::CaptureStderr();
-    const std::string svg = b.convert();
-    const std::string log = ::testing::internal::GetCapturedStderr();
+    // Read the conversion report rather than stderr: with a statically linked
+    // runtime the library's stderr is not the test's, and the report is what
+    // library hosts see.
+    const auto result = b.run();
+    ASSERT_EQ(result.status, OPENCGM_OK) << result.error;
+    const std::string &svg = result.svg;
+    const std::string &log = result.report;
 
     const std::string rect = fillOf(svg, "rect");
     EXPECT_NE(rect, "none");
@@ -126,9 +130,10 @@ TEST(SvgFills, TriangularInterpolationFallsBackToTheAverageColour)
     interpolatedRect(b, B::cat({B::i16(3), B::i16(0), B::i16(0), B::i16(0), B::i16(0), B::i16(0),
                                 rgb(255, 0, 0), rgb(0, 255, 0), rgb(0, 0, 255)}));
 
-    ::testing::internal::CaptureStderr();
-    const std::string svg = b.convert();
-    const std::string log = ::testing::internal::GetCapturedStderr();
+    const auto result = b.run();
+    ASSERT_EQ(result.status, OPENCGM_OK) << result.error;
+    const std::string &svg = result.svg;
+    const std::string &log = result.report;
 
     EXPECT_EQ(fillOf(svg, "rect"), "#555555");
     EXPECT_EQ(svg.find("Gradient"), std::string::npos);

@@ -5022,7 +5022,7 @@ namespace opencgm
         {
             if (!text_as_path_warning_emitted_)
             {
-                std::cerr << "[svg] text-as-path fallback to <text>; no outline font available for \"" << primaryFont << "\"\n";
+                reportDegradation("text-as-path fallback to <text>; no outline font available for \"" + primaryFont + "\"");
                 text_as_path_warning_emitted_ = true;
             }
             emitStandardText(params);
@@ -5053,7 +5053,7 @@ namespace opencgm
         {
             if (!text_as_path_warning_emitted_)
             {
-                std::cerr << "[svg] text-as-path fallback to <text>; missing glyph outlines in font \"" << primaryFont << "\"\n";
+                reportDegradation("text-as-path fallback to <text>; missing glyph outlines in font \"" + primaryFont + "\"");
                 text_as_path_warning_emitted_ = true;
             }
             emitStandardText(params);
@@ -9373,8 +9373,8 @@ namespace opencgm
             // fill, so it has to be said out loud.
             if (!pattern_fallback_warning_emitted_)
             {
-                std::cerr << "[svg] PATTERN INDEX " << current_style_.patternIndex()
-                          << " did not resolve to a pattern; filling solid instead\n";
+                reportDegradation("PATTERN INDEX " + std::to_string(current_style_.patternIndex()) +
+                                  " did not resolve to a pattern; filling solid instead");
                 pattern_fallback_warning_emitted_ = true;
             }
             break;
@@ -9388,8 +9388,8 @@ namespace opencgm
             }
             if (!hatch_fallback_warning_emitted_)
             {
-                std::cerr << "[svg] HATCH INDEX " << current_style_.hatchIndex()
-                          << " did not resolve to a pattern; filling solid instead\n";
+                reportDegradation("HATCH INDEX " + std::to_string(current_style_.hatchIndex()) +
+                                  " did not resolve to a pattern; filling solid instead");
                 hatch_fallback_warning_emitted_ = true;
             }
             break;
@@ -9409,15 +9409,15 @@ namespace opencgm
             {
                 if (unsupported_fill_styles_warned_.insert(fs).second)
                 {
-                    std::cerr << "[svg] INTERPOLATED INTERIOR style " << interpolated_fill_.style
-                              << " has no SVG gradient equivalent; filling with the average of its colours\n";
+                    reportDegradation("INTERPOLATED INTERIOR style " + std::to_string(interpolated_fill_.style) +
+                                      " has no SVG gradient equivalent; filling with the average of its colours");
                 }
                 return std::string("fill=\"") + colorToHexString(averageInterpolatedColour()) + "\" ";
             }
             if (unsupported_fill_styles_warned_.insert(fs).second)
             {
-                std::cerr << "[svg] INTERIOR STYLE 6 (INTERPOLATED) has no INTERPOLATED INTERIOR to apply;"
-                          << " filling solid instead\n";
+                reportDegradation("INTERIOR STYLE 6 (INTERPOLATED) has no INTERPOLATED INTERIOR to apply;"
+                                  " filling solid instead");
             }
             break;
         }
@@ -9431,8 +9431,8 @@ namespace opencgm
             // belongs, and scores worse than any other test in the conformance screen.
             if (fs != 1 && unsupported_fill_styles_warned_.insert(fs).second)
             {
-                std::cerr << "[svg] INTERIOR STYLE " << fs << " (" << interiorStyleName(fs)
-                          << ") is not rendered; filling solid instead\n";
+                reportDegradation("INTERIOR STYLE " + std::to_string(fs) + " (" + interiorStyleName(fs) +
+                                  ") is not rendered; filling solid instead");
             }
             break;
         }
@@ -9481,6 +9481,16 @@ namespace opencgm
             buffer << "stroke=\"none\" ";
         }
         return buffer.str();
+    }
+
+    void SVGConverter::reportDegradation(const std::string &message)
+    {
+        // Still printed, as before, for command-line users; also kept so the
+        // C API can put it in the conversion report, which is the only place
+        // a library host (or a statically linked runtime's separate stderr)
+        // will see it.
+        std::cerr << "[svg] " << message << "\n";
+        degradations_.push_back(message);
     }
 
     const char *SVGConverter::interiorStyleName(int style)

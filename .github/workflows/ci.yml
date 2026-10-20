@@ -18,8 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Configured as release.yml is, so a release cannot be the first build
+      # to try the static MSVC runtime (v1.5.2's first attempt was). Ignored
+      # on Linux; the shared runtime is built by the Reforge repository's CI.
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DOPENCGM_STATIC_MSVC_RUNTIME=ON
 
       - name: Build
         run: cmake --build build --config Release

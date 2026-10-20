@@ -78,7 +78,8 @@ namespace opencgm_test
         {
             int status = 0;
             std::string svg;
-            std::string error;  // opencgm_last_error() when status is not OK
+            std::string error;   // opencgm_last_error() when status is not OK
+            std::string report;  // opencgm_get_last_report_json()
         };
 
         // Expects the conversion to succeed and returns the SVG.
@@ -116,6 +117,10 @@ namespace opencgm_test
             {
                 const char *message = opencgm_last_error();
                 result.error = message ? message : "";
+            }
+            if (const char *report = opencgm_get_last_report_json(ctx))
+            {
+                result.report = report;
             }
             opencgm_destroy(ctx);
 
