@@ -48,6 +48,7 @@ add_executable(opencgm_tests
     test_svg_semantic_contracts.cpp
     test_svg_fills.cpp
     test_svg_text_and_arcs.cpp
+    test_svg_viewbox.cpp
     test_svg_xml_utils.cpp
     test_tile_geometry.cpp
 )

@@ -2260,8 +2260,28 @@ namespace opencgm
             }
         };
 
+        // Autofit crops the viewBox to these bounds, so it must only act when
+        // they cover everything that will be drawn. Any primitive whose
+        // extent is not measured here (plain TEXT, tiles, symbols, segment
+        // copies...) makes the bounds a guess, and cropping to a guess cut
+        // drawings made of DISJOINT POLYLINEs down to their title-block text.
+        bool bounds_complete = true;
+        auto includePoints = [&](const std::vector<CGMPoint> &points)
+        {
+            for (const auto &pt : points)
+            {
+                updateBounds(pt.x(), pt.y());
+            }
+        };
+
         for (const auto &cmd : cgm_file_->commands())
         {
+            if (cmd->elementClass() == ClassCode::SegmentControlandSegmentAttributeElements &&
+                cmd->elementId() == 1) // COPY SEGMENT can transform geometry anywhere
+            {
+                bounds_complete = false;
+                continue;
+            }
             if (cmd->elementClass() != ClassCode::GraphicalPrimitiveElements)
             {
                 continue;
@@ -2270,6 +2290,73 @@ namespace opencgm
             const int elementId = cmd->elementId();
             switch (elementId)
             {
+            case 2: // Disjoint Polyline
+                if (auto *lines = metricsCast<DisjointPolyline, ClassCode::GraphicalPrimitiveElements, 2>(cmd.get()))
+                    includePoints(lines->points());
+                break;
+            case 3: // Polymarker (marker size is small next to the fit margin)
+                if (auto *markers = metricsCast<Polymarker, ClassCode::GraphicalPrimitiveElements, 3>(cmd.get()))
+                    includePoints(markers->points());
+                break;
+            case 8: // Polygon Set
+                if (auto *set = metricsCast<PolygonSet, ClassCode::GraphicalPrimitiveElements, 8>(cmd.get()))
+                    for (const auto &edge : set->edges())
+                        updateBounds(edge.point.x(), edge.point.y());
+                break;
+            case 9: // Cell Array: P and Q are opposite corners, R a third
+                if (auto *cells = metricsCast<CellArray, ClassCode::GraphicalPrimitiveElements, 9>(cmd.get()))
+                {
+                    const CGMPoint &p = cells->cornerP(), &q = cells->cornerQ(), &r = cells->cornerR();
+                    includePoints({p, q, r, CGMPoint(p.x() + q.x() - r.x(), p.y() + q.y() - r.y())});
+                }
+                break;
+            case 10: // Generalized Drawing Primitive
+                if (auto *gdp = metricsCast<GeneralizedDrawingPrimitive, ClassCode::GraphicalPrimitiveElements, 10>(cmd.get()))
+                    includePoints(gdp->points());
+                break;
+            case 13: // Circular Arc 3 Point
+            case 14: // Circular Arc 3 Point Close
+            {
+                CGMPoint p1, p2, p3;
+                if (auto *arc = metricsCast<CircularArc3Point, ClassCode::GraphicalPrimitiveElements, 13>(cmd.get()))
+                    p1 = arc->start(), p2 = arc->intermediate(), p3 = arc->end();
+                else if (auto *arcClose = metricsCast<CircularArc3PointClose, ClassCode::GraphicalPrimitiveElements, 14>(cmd.get()))
+                    p1 = arcClose->start(), p2 = arcClose->intermediate(), p3 = arcClose->end();
+                else
+                    break;
+                includePoints({p1, p2, p3});
+                // The whole circle bounds the arc; over-estimating only makes
+                // autofit less likely, never crops the drawing.
+                if (auto centre = svg::computeCenterFrom3Points(p1, p2, p3))
+                {
+                    const double r = std::hypot(p1.x() - centre->x(), p1.y() - centre->y());
+                    updateBounds(centre->x() - r, centre->y() - r);
+                    updateBounds(centre->x() + r, centre->y() + r);
+                }
+                break;
+            }
+            case 20: // Circular Arc Centre Reversed
+                if (auto *arc = metricsCast<CircularArcCentreReversed, ClassCode::GraphicalPrimitiveElements, 20>(cmd.get()))
+                {
+                    updateBounds(arc->center().x() - arc->radius(), arc->center().y() - arc->radius());
+                    updateBounds(arc->center().x() + arc->radius(), arc->center().y() + arc->radius());
+                }
+                break;
+            case 23: // Parabolic Arc: its control triangle contains it
+                if (auto *arc = metricsCast<ParabolicArc, ClassCode::GraphicalPrimitiveElements, 23>(cmd.get()))
+                    includePoints({arc->tangentIntersection(), arc->startPoint(), arc->endPoint()});
+                break;
+            case 24: // NUB
+                if (auto *spline = metricsCast<NonUniformBSpline, ClassCode::GraphicalPrimitiveElements, 24>(cmd.get()))
+                    includePoints(spline->controlPoints());
+                break;
+            case 25: // NURB
+                if (auto *spline = metricsCast<NonUniformRationalBSpline, ClassCode::GraphicalPrimitiveElements, 25>(cmd.get()))
+                    includePoints(spline->controlPoints());
+                break;
+            case 6:  // Append Text continues a TEXT / RESTRICTED TEXT already counted
+            case 21: // Connecting Edge joins points other primitives supply
+                break;
             case 1: // Polyline
             {
                 auto *polyline = metricsCast<Polyline, ClassCode::GraphicalPrimitiveElements, 1>(cmd.get());
@@ -2366,6 +2453,8 @@ namespace opencgm
                 {
                     updateBounds(text->position().x(), text->position().y());
                 }
+                // Its extent depends on attributes and fonts not known here.
+                bounds_complete = false;
                 break;
             }
             case 5: // Restricted Text
@@ -2373,7 +2462,12 @@ namespace opencgm
                 auto *restricted = metricsCast<RestrictedText, ClassCode::GraphicalPrimitiveElements, 5>(cmd.get());
                 if (restricted)
                 {
-                    updateBounds(restricted->position().x(), restricted->position().y());
+                    // The run fits its box, whose orientation and alignment
+                    // are not known here: count the box in every direction.
+                    const CGMPoint &at = restricted->position();
+                    const double reach = std::max(std::abs(restricted->deltaWidth()), std::abs(restricted->deltaHeight()));
+                    updateBounds(at.x() - reach, at.y() - reach);
+                    updateBounds(at.x() + reach, at.y() + reach);
                 }
                 break;
             }
@@ -2416,6 +2510,9 @@ namespace opencgm
                 break;
             }
             default:
+                // Hyperbolic arcs, symbols, tiles and anything newer: drawn,
+                // but not measured here.
+                bounds_complete = false;
                 break;
             }
         }
@@ -2704,7 +2801,7 @@ namespace opencgm
         double coverage_x = 1.0;
         double coverage_y = 1.0;
 
-        if (allow_autofit && has_points && !apply_view_context_on_load_)
+        if (allow_autofit && has_points && bounds_complete && !apply_view_context_on_load_)
         {
             coverage_x = (picture_width > 0.0) ? (geometry_width / picture_width) : 1.0;
             coverage_y = (picture_height > 0.0) ? (geometry_height / picture_height) : 1.0;
@@ -2736,6 +2833,16 @@ namespace opencgm
             picture_vdc_max_y_ = bounds_y2 + fit_margin_y;
             picture_vdc_width_ = std::abs(picture_vdc_max_x_ - picture_vdc_min_x_);
             picture_vdc_height_ = std::abs(picture_vdc_max_y_ - picture_vdc_min_y_);
+
+            // The transform maps this extent onto the canvas, which is now
+            // sized to the fitted rectangle. Leaving it at the full VDC extent
+            // squeezed the whole picture into the smaller canvas, so the
+            // drawing came out a few percent of the viewBox wide, in a corner.
+            // Keep each axis's orientation so inverted VDC extents still flip.
+            picture_vdc_orig_x1_ = picture_vdc_x_left_ ? picture_vdc_max_x_ : picture_vdc_min_x_;
+            picture_vdc_orig_x2_ = picture_vdc_x_left_ ? picture_vdc_min_x_ : picture_vdc_max_x_;
+            picture_vdc_orig_y1_ = picture_vdc_y_down_ ? picture_vdc_max_y_ : picture_vdc_min_y_;
+            picture_vdc_orig_y2_ = picture_vdc_y_down_ ? picture_vdc_min_y_ : picture_vdc_max_y_;
         }
 
         if (picture_vdc_width_ <= 0.0)
