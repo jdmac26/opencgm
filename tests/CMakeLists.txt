@@ -45,6 +45,7 @@ add_executable(opencgm_tests
     test_aps_geometry.cpp
     test_aps_serializer.cpp
     test_aps_text_decoder.cpp
+    test_png_encoder.cpp
     test_svg_semantic_contracts.cpp
     test_svg_fills.cpp
     test_svg_text_and_arcs.cpp
@@ -61,6 +62,7 @@ target_link_libraries(opencgm_tests
 target_include_directories(opencgm_tests
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party
 )
 
 # Ensure test executable can find DLLs on Windows
