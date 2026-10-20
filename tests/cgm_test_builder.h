@@ -21,12 +21,15 @@ namespace opencgm_test
     class CgmBuilder
     {
     public:
-        CgmBuilder()
+        CgmBuilder() : CgmBuilder(0, 0, 1000, 1000) {}
+
+        // Corners are written as given, so an inverted extent stays inverted.
+        CgmBuilder(int x1, int y1, int x2, int y2)
         {
             element(0, 1, str("T"));                     // BEGIN METAFILE
             element(1, 1, i16(1));                       // METAFILE VERSION
             element(0, 3, str("P"));                     // BEGIN PICTURE
-            element(2, 6, cat({i16(0), i16(0), i16(1000), i16(1000)}));  // VDC EXTENT
+            element(2, 6, cat({i16(x1), i16(y1), i16(x2), i16(y2)}));  // VDC EXTENT
             element(0, 4, {});                           // BEGIN PICTURE BODY
         }
 
