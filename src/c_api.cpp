@@ -43,6 +43,7 @@
 #include "opencgm/xcf_generator.h"
 #include "opencgm/xcf_parser.h"
 #include "opencgm/utils/gzip_utils.h"
+#include "opencgm/svg/output_compactor.h"
 #include <string>
 #include <string_view>
 #include <memory>
@@ -906,7 +907,14 @@ static std::string normalize_svg_output(
         svg_content = remove_xml_comments(svg_content);
         svg_content = remove_unused_svg_defs(std::move(svg_content));
         svg_content = remove_empty_svg_groups(std::move(svg_content));
-        svg_content = optimize_svg_path_attributes(std::move(svg_content), precision);
+        // The requested decimals, but never coarser than 1/10000 of the
+        // picture: a fixed two decimals is too coarse for small viewBoxes.
+        const int decimals = opencgm::svg::OutputCompactor::decimalsForViewBox(
+            svg_content, std::clamp(static_cast<int>(std::round(precision)), 0, 6));
+        svg_content = optimize_svg_path_attributes(std::move(svg_content), decimals);
+        svg_content = opencgm::svg::OutputCompactor::roundPoints(svg_content, decimals);
+        // Before minify, which joins the one-element-per-line layout it reads.
+        svg_content = opencgm::svg::OutputCompactor::hoistSharedStyles(svg_content);
     }
 
     if (!minify_output)

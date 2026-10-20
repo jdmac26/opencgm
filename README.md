@@ -104,6 +104,12 @@ Common options:
   pixel-exact verification
 - `--validate-geometry` — enforce viewBox/viewcontext consistency; tune with
   `--geometry-tolerance <value>` (default: 0.01 user units)
+- `--optimize` — smaller output that renders the same: primitives sharing a
+  style are grouped under one `<g>`, coordinates are rounded to 1/10000 of
+  the picture, and comments and unused definitions are dropped. Large line
+  illustrations typically halve. Off by default because the SVG's structure
+  changes, which matters if your pipeline post-processes it. Add `--minify`
+  to also remove whitespace between elements.
 - `--geometry-log` / `--raster-log` — emit diagnostics to stderr
 
 `opencgm_cli --help` lists every flag, including watch-folder mode

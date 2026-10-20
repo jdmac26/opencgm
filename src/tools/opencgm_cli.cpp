@@ -36,6 +36,8 @@ struct CliOptions
 {
     bool verbose = false;
     bool quiet = false;
+    bool optimize = false;
+    bool minify = false;
     std::string profile = "s1000d";
     bool profile_set = false;
     std::string preset;
@@ -131,6 +133,11 @@ void print_usage(const char *exe)
                  "  --shim-url <url>                   Reference external viewer shim instead of inline script\n"
                  "  --quantize-png                     Reduce raster PNG color precision\n"
                  "  --no-quantize-png                  Disable PNG quantization\n"
+                 "  --optimize                         Smaller output: group primitives that share\n"
+                 "                                     a style, round coordinates to 1/10000 of the\n"
+                 "                                     picture, drop comments and unused defs.\n"
+                 "                                     Renders the same; the SVG structure differs.\n"
+                 "  --minify                           Remove whitespace between elements\n"
                  "  --raster-log                       Emit raster diagnostic logs\n"
                  "  --log <debug|info|quiet>           Set log verbosity\n"
                  "  --verbose                          Print conversion progress\n"
@@ -324,6 +331,15 @@ int convert_file(const CliOptions &options,
     if (options.profile_set)
     {
         opencgm_set_profile(ctx, options.profile.c_str());
+    }
+    // Only ever switch these on, so a preset that enables them keeps them.
+    if (options.optimize)
+    {
+        opencgm_set_optimize_paths(ctx, 1);
+    }
+    if (options.minify)
+    {
+        opencgm_set_minify(ctx, 1);
     }
     if (options.adopt_view_on_load_set)
     {
@@ -828,6 +844,14 @@ int main(int argc, char **argv)
         else if (std::strcmp(arg, "--quiet") == 0)
         {
             options.quiet = true;
+        }
+        else if (std::strcmp(arg, "--optimize") == 0)
+        {
+            options.optimize = true;
+        }
+        else if (std::strcmp(arg, "--minify") == 0)
+        {
+            options.minify = true;
         }
         else if (std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0)
         {
