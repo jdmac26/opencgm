@@ -27,6 +27,7 @@ enable_testing()
 # Test executable - includes all test files
 add_executable(opencgm_tests
     test_cell_array.cpp
+    test_cli_and_messages.cpp
     test_nurbs_approximator.cpp
     test_tile_raster.cpp
     test_color_scaling.cpp
