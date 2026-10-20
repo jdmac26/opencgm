@@ -74,7 +74,23 @@ namespace opencgm_test
                 bytes_.push_back(0);
         }
 
+        struct Result
+        {
+            int status = 0;
+            std::string svg;
+            std::string error;  // opencgm_last_error() when status is not OK
+        };
+
+        // Expects the conversion to succeed and returns the SVG.
         std::string convert(const char *profile = "webcgm")
+        {
+            Result result = run(profile);
+            EXPECT_EQ(result.status, OPENCGM_OK) << result.error;
+            return result.svg;
+        }
+
+        // Converts without judging the outcome, for tests of failures.
+        Result run(const char *profile = "webcgm")
         {
             namespace fs = std::filesystem;
             element(0, 5, {});  // END PICTURE
@@ -92,11 +108,16 @@ namespace opencgm_test
                 f.write(reinterpret_cast<const char *>(bytes_.data()), static_cast<std::streamsize>(bytes_.size()));
             }
 
+            Result result;
             opencgm_ctx_t *ctx = opencgm_create();
             opencgm_set_profile(ctx, profile);
-            const int rc = opencgm_convert_cgm_to_svg(ctx, in.string().c_str(), out.string().c_str());
+            result.status = opencgm_convert_cgm_to_svg(ctx, in.string().c_str(), out.string().c_str());
+            if (result.status != OPENCGM_OK)
+            {
+                const char *message = opencgm_last_error();
+                result.error = message ? message : "";
+            }
             opencgm_destroy(ctx);
-            EXPECT_EQ(rc, OPENCGM_OK);
 
             std::stringstream ss;
             {
@@ -105,7 +126,8 @@ namespace opencgm_test
             }
             fs::remove(in);
             fs::remove(out);
-            return ss.str();
+            result.svg = ss.str();
+            return result;
         }
 
     private:

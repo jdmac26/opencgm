@@ -8,9 +8,11 @@
 
 #include "opencgm/cgm_file.h"
 #include "opencgm/profile_validator.h"
+#include "cli_args.h"
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 #include <algorithm>
 
 using namespace opencgm;
@@ -19,7 +21,8 @@ void printUsage(const char* progName) {
     std::cout << "Usage: " << progName << " [options] <cgm-file>\n\n";
     std::cout << "Options:\n";
     std::cout << "  -p, --profile <type>    Specify profile type:\n";
-    std::cout << "                          webcgm21, iso8632, ata26, ata27, ata28, ata29, s1000d\n";
+    std::cout << "                          webcgm21 (webcgm), iso8632, ata26, ata27, ata28,\n";
+    std::cout << "                          ata29 (ata), s1000d, pip, cals\n";
     std::cout << "                          (default: auto-detect)\n";
     std::cout << "  -j, --json              Output JSON format\n";
     std::cout << "  -v, --verbose           Verbose output\n";
@@ -29,19 +32,20 @@ void printUsage(const char* progName) {
     std::cout << "  " << progName << " diagram.cgm\n";
     std::cout << "  " << progName << " --dump diagram.cgm > diagram-elements.txt\n";
     std::cout << "  " << progName << " --profile ata29 illustration.cgm\n";
-    std::cout << "  " << progName << " --json --profile s1000d ICN-*.CGM\n";
+    std::cout << "  " << progName << " --json --profile s1000d ICN-C0419-S1000D0362-001-01.CGM\n";
 }
 
 ProfileType parseProfileType(const std::string& profileStr) {
     std::string lower = profileStr;
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
-    if (lower == "webcgm21" || lower == "webcgm-2.1") return ProfileType::WEBCGM_2_1;
+    // "webcgm" and "ata" are the names opencgm_cli uses for the same profiles.
+    if (lower == "webcgm21" || lower == "webcgm-2.1" || lower == "webcgm") return ProfileType::WEBCGM_2_1;
     if (lower == "iso8632" || lower == "iso-8632" || lower == "isoiec8632") return ProfileType::ISO_IEC_8632_COMPAT;
     if (lower == "ata26" || lower == "ata-2.6") return ProfileType::ATA_GREXCHANGE_2_6;
     if (lower == "ata27" || lower == "ata-2.7") return ProfileType::ATA_GREXCHANGE_2_7;
     if (lower == "ata28" || lower == "ata-2.8") return ProfileType::ATA_GREXCHANGE_2_8;
-    if (lower == "ata29" || lower == "ata-2.9") return ProfileType::ATA_GREXCHANGE_2_9;
+    if (lower == "ata29" || lower == "ata-2.9" || lower == "ata") return ProfileType::ATA_GREXCHANGE_2_9;
     if (lower == "s1000d") return ProfileType::S1000D_ISSUE_6;
     if (lower == "pip" || lower == "cggc" || lower == "pip-cggc" || lower == "cgm-pip") return ProfileType::PIP_CGGC;
     if (lower == "cals" || lower == "mil-prf-28003" || lower == "mil-d-28003") return ProfileType::CALS_MIL_PRF_28003;
@@ -50,6 +54,14 @@ ProfileType parseProfileType(const std::string& profileStr) {
 }
 
 int main(int argc, char* argv[]) {
+    std::vector<std::string> expanded = expandOptionAssignments(argc, argv);
+    std::vector<char*> expandedArgv;
+    for (auto& arg : expanded) {
+        expandedArgv.push_back(arg.data());
+    }
+    argc = static_cast<int>(expandedArgv.size());
+    argv = expandedArgv.data();
+
     std::string cgmFile;
     ProfileType profileType = ProfileType::UNKNOWN;
     ProfileDetector::DetectionResult autoDetection{ProfileType::UNKNOWN, "", false};
@@ -82,6 +94,12 @@ int main(int argc, char* argv[]) {
         } else if (arg == "-d" || arg == "--dump") {
             dump = true;
         } else if (arg[0] != '-') {
+            // One file per run: a shell glob used to validate only its last match.
+            if (!cgmFile.empty()) {
+                std::cerr << "Error: cgm_validate checks one file at a time; got " << cgmFile
+                          << " and " << arg << "\n";
+                return 1;
+            }
             cgmFile = arg;
         } else {
             std::cerr << "Error: Unknown option: " << arg << "\n";

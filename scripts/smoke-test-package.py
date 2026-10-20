@@ -191,6 +191,9 @@ def main() -> int:
         dump = subprocess.run([str(validate), "--dump", str(cgm)], capture_output=True, text=True)
         if dump.returncode != 0 or "4/12\tCircle" not in dump.stdout:
             problems.append(f"cgm_validate --dump did not list the circle (exit {dump.returncode})")
+        assigned = subprocess.run([str(cli), "--profile=compat", str(cgm), str(svg)], capture_output=True, text=True)
+        if assigned.returncode != 0:
+            problems.append(f"opencgm_cli rejected --profile=compat (exit {assigned.returncode})")
 
     if problems:
         print("\nFAILED", file=sys.stderr)

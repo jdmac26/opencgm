@@ -14,6 +14,7 @@
 
 #include "opencgm/c_api.h"
 #include "opencgm/version.h"
+#include "cli_args.h"
 #include "../../third_party/nlohmann/json.hpp"
 
 namespace fs = std::filesystem;
@@ -382,9 +383,10 @@ int convert_file(const CliOptions &options,
     int result = opencgm_convert_cgm_to_svg(ctx, input.c_str(), output.c_str());
     if (result != OPENCGM_OK)
     {
+        // The engine's message already begins "Conversion failed: ".
         const char *msg = opencgm_last_error();
         std::fprintf(stderr,
-                     "Conversion failed (%d): %s\n",
+                     "Error (%d): %s\n",
                      result,
                      msg ? msg : "unknown error");
         opencgm_destroy(ctx);
@@ -575,6 +577,15 @@ int run_watch_mode(const CliOptions &options)
 
 int main(int argc, char **argv)
 {
+    std::vector<std::string> expanded = expandOptionAssignments(argc, argv);
+    std::vector<char *> expandedArgv;
+    for (auto &arg : expanded)
+    {
+        expandedArgv.push_back(arg.data());
+    }
+    argc = static_cast<int>(expandedArgv.size());
+    argv = expandedArgv.data();
+
     CliOptions options;
     std::vector<std::string> positional;
 

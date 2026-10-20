@@ -3115,7 +3115,8 @@ namespace opencgm
             std::ostringstream oss;
             oss << "WebCGM 2.1 Element Set (REC-webcgm21-20100301, Table 2-1) prohibits SEGMENT elements; encountered "
                 << (cmd ? cmd->toString() : label)
-                << ". Re-run with --allow-segments or --profile=iso8632 to flatten legacy ISO/IEC 8632 segments.";
+                << ". Convert with the compat profile (opencgm_cli --profile compat), which flattens legacy"
+                   " ISO/IEC 8632 segments.";
             throw std::runtime_error(oss.str());
         }
     }
@@ -9117,11 +9118,11 @@ namespace opencgm
             switch (geometry.issue)
             {
             case svg::HatchGeometryIssue::DegenerateDefinition:
-                throw std::runtime_error("Hatch definition vectors are degenerate; rerun with --profile=compat for fallback rendering");
+                throw std::runtime_error("Hatch definition vectors are degenerate; convert with the compat profile (opencgm_cli --profile compat) forfallback rendering");
             case svg::HatchGeometryIssue::ParallelSpacing:
-                throw std::runtime_error("Hatch definition spacing vector is parallel to hatch direction; rerun with --profile=compat for fallback rendering");
+                throw std::runtime_error("Hatch definition spacing vector is parallel to hatch direction; convert with the compat profile (opencgm_cli --profile compat) forfallback rendering");
             case svg::HatchGeometryIssue::InvalidDirection:
-                throw std::runtime_error("Hatch direction produced invalid transform vectors; rerun with --profile=compat for fallback rendering");
+                throw std::runtime_error("Hatch direction produced invalid transform vectors; convert with the compat profile (opencgm_cli --profile compat) forfallback rendering");
             case svg::HatchGeometryIssue::DegenerateBasis:
             case svg::HatchGeometryIssue::None:
                 break;
@@ -9187,7 +9188,7 @@ namespace opencgm
                 {
                     std::ostringstream message;
                     message << "HATCH STYLE DEFINITION styleIndicator=" << defIt->second.styleIndicator
-                            << " is not supported in strict profile; rerun with --profile=compat for fallback rendering";
+                            << " is not supported outside the compat profile; convert with the compat profile (opencgm_cli --profile compat) forfallback rendering";
                     throw std::runtime_error(message.str());
                 }
 #ifndef NDEBUG
@@ -9245,7 +9246,7 @@ namespace opencgm
         if (geometry.issue ==
             svg::HatchGeometryIssue::DegenerateBasis)
         {
-            throw std::runtime_error("HATCH fallback basis is degenerate; rerun with --profile=compat for heuristic rendering");
+            throw std::runtime_error("HATCH fallback basis is degenerate; convert with the compat profile (opencgm_cli --profile compat) forheuristic rendering");
         }
 
         if (!defs_open_)
@@ -9611,7 +9612,7 @@ namespace opencgm
         {
             if (!compatibility_mode_)
             {
-                throw std::runtime_error("Pattern index has no PATTERN TABLE; rerun with --profile=compat for tolerant decoding");
+                throw std::runtime_error("Pattern index has no PATTERN TABLE; convert with the compat profile (opencgm_cli --profile compat) fortolerant decoding");
             }
             return {};
         }
@@ -9685,19 +9686,19 @@ namespace opencgm
         switch (geometry.issue)
         {
         case svg::PatternGeometryIssue::InvalidGrid:
-            throw std::runtime_error("PATTERN TABLE grid is invalid (nx/ny <= 0); rerun with --profile=compat for heuristic fixes");
+            throw std::runtime_error("PATTERN TABLE grid is invalid (nx/ny <= 0); convert with the compat profile (opencgm_cli --profile compat) forheuristic fixes");
         case svg::PatternGeometryIssue::CellCountMismatch:
         {
             std::ostringstream message;
             message << "PATTERN TABLE cell count (" << table.cells.size()
                     << ") does not match nx*ny (" << geometry.expected_cells
-                    << "); rerun with --profile=compat for tolerant decoding";
+                    << "); convert with the compat profile (opencgm_cli --profile compat) fortolerant decoding";
             throw std::runtime_error(message.str());
         }
         case svg::PatternGeometryIssue::DegenerateSize:
-            throw std::runtime_error("PATTERN SIZE vectors are degenerate; rerun with --profile=compat for heuristic fallbacks");
+            throw std::runtime_error("PATTERN SIZE vectors are degenerate; convert with the compat profile (opencgm_cli --profile compat) forheuristic fallbacks");
         case svg::PatternGeometryIssue::ZeroTileStep:
-            throw std::runtime_error("PATTERN SIZE produced zero tile vectors; rerun with --profile=compat for heuristic fallbacks");
+            throw std::runtime_error("PATTERN SIZE produced zero tile vectors; convert with the compat profile (opencgm_cli --profile compat) forheuristic fallbacks");
         case svg::PatternGeometryIssue::None:
             break;
         }
@@ -9744,7 +9745,7 @@ namespace opencgm
                 {
                     if (!compatibility_mode_)
                     {
-                        throw std::runtime_error("PATTERN TABLE cell count underrun; rerun with --profile=compat for tolerant decoding");
+                        throw std::runtime_error("PATTERN TABLE cell count underrun; convert with the compat profile (opencgm_cli --profile compat) fortolerant decoding");
                     }
                     continue;
                 }
