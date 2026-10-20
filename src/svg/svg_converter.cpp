@@ -13,6 +13,7 @@
 #include "opencgm/svg/svg_utils.h"
 #include "opencgm/svg/tile_geometry.h"
 #include "opencgm/svg/tile_raster.h"
+#include "opencgm/svg/png_encoder.h"
 #include "opencgm/svg/xml_utils.h"
 #include "opencgm/commands/graphical_primitive_commands.h"
 #include "opencgm/commands/attribute_commands.h"
@@ -537,106 +538,16 @@ namespace opencgm
                                                                uint32_t width,
                                                                uint32_t height)
     {
-        if (!factory || rgba.empty() || width == 0 || height == 0)
+        // WIC is still used to decode BMP and CCITT payloads, but not to encode:
+        // it always wrote 32-bit RGBA, several times the size of the palette PNG
+        // a bitonal or small-palette CGM raster needs.
+        (void)factory;
+        auto png = svg::encodePng(rgba, width, height);
+        if (png.empty())
         {
             return std::nullopt;
         }
-
-        const UINT stride = width * 4;
-        ComPtr<IWICBitmap> bitmap;
-        HRESULT hr = factory->CreateBitmapFromMemory(width,
-                                                     height,
-                                                     GUID_WICPixelFormat32bppRGBA,
-                                                     stride,
-                                                     static_cast<UINT>(rgba.size()),
-                                                     const_cast<BYTE *>(reinterpret_cast<const BYTE *>(rgba.data())),
-                                                     &bitmap);
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        ComPtr<IStream> memStream(SHCreateMemStream(nullptr, 0));
-        if (!memStream)
-        {
-            return std::nullopt;
-        }
-
-        ComPtr<IWICBitmapEncoder> encoder;
-        hr = factory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder);
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        hr = encoder->Initialize(memStream.Get(), WICBitmapEncoderNoCache);
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        ComPtr<IWICBitmapFrameEncode> frame;
-        ComPtr<IPropertyBag2> frameProps;
-        hr = encoder->CreateNewFrame(&frame, &frameProps);
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        hr = frame->Initialize(frameProps.Get());
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        hr = frame->SetSize(width, height);
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        WICPixelFormatGUID format = GUID_WICPixelFormat32bppRGBA;
-        hr = frame->SetPixelFormat(&format);
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        hr = frame->WriteSource(bitmap.Get(), nullptr);
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        hr = frame->Commit();
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        hr = encoder->Commit();
-        if (FAILED(hr))
-        {
-            return std::nullopt;
-        }
-
-        STATSTG stat{};
-        if (FAILED(memStream->Stat(&stat, STATFLAG_NONAME)))
-        {
-            return std::nullopt;
-        }
-
-        const auto size = static_cast<size_t>(stat.cbSize.QuadPart);
-        std::vector<uint8_t> pngData(size);
-        LARGE_INTEGER origin{};
-        memStream->Seek(origin, STREAM_SEEK_SET, nullptr);
-        ULONG bytesRead = 0;
-        if (FAILED(memStream->Read(pngData.data(), static_cast<ULONG>(pngData.size()), &bytesRead)))
-        {
-            return std::nullopt;
-        }
-        pngData.resize(bytesRead);
-        return pngData;
+        return png;
     }
 
     /**
@@ -7931,7 +7842,7 @@ namespace opencgm
                         << "\" style=\"image-rendering:pixelated\" "
                         << "transform=\"" << transformAttr.str() << "\" "
                         << clipPathAttribute();
-            svg_output_ << "xlink:href=\"" << dataUri << "\" href=\"" << dataUri << "\" ";
+            svg_output_ << "xlink:href=\"" << dataUri << "\" ";
             svg_output_ << "preserveAspectRatio=\"none\"" << debugCommandAttribute() << " />\n";
             if (logRaster)
             {
@@ -7965,7 +7876,7 @@ namespace opencgm
                     << "\" height=\"" << placement.fallback_height
                     << "\" style=\"image-rendering:pixelated\" "
                     << clipPathAttribute();
-        svg_output_ << "xlink:href=\"" << dataUri << "\" href=\"" << dataUri << "\" ";
+        svg_output_ << "xlink:href=\"" << dataUri << "\" ";
         svg_output_ << "preserveAspectRatio=\"none\"" << debugCommandAttribute() << " />\n";
 
         if (logRaster)
@@ -8306,7 +8217,7 @@ namespace opencgm
                     << "\" width=\"" << svgWidth << "\" height=\"" << svgHeight
                     << "\" style=\"image-rendering:" << imageRendering << "\" "
                     << clipPathAttribute();
-        svg_output_ << "xlink:href=\"" << dataUri << "\" href=\"" << dataUri << "\" ";
+        svg_output_ << "xlink:href=\"" << dataUri << "\" ";
         svg_output_ << "preserveAspectRatio=\"none\" />\n";
         return true;
     }

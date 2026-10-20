@@ -13,6 +13,7 @@
 #include "svg/internal_types.h"
 #include "svg/tile_geometry.h"
 #include "svg/xml_utils.h"
+#include <cstring>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -544,13 +545,11 @@ public:
                 dashHasDot = dashContainsZeroMark(dash);
             }
         }
-        // Always output line cap and join for WebCGM compatibility. When the
-        // dash pattern contains a CGM "dot" mark (0-length entry), force round
-        // linecap so the dot renders as a visible circle; butt would render
-        // 0-length to nothing and lose the dot.
+        // When the dash pattern contains a CGM "dot" mark (0-length entry),
+        // force round linecap so the dot renders as a visible circle; butt
+        // would render 0-length to nothing and lose the dot.
         const char* cap = dashHasDot ? "round" : toSvgLineCap(line_cap_);
-        ss << "stroke-linecap=\"" << cap << "\" ";
-        ss << "stroke-linejoin=\"" << toSvgLineJoin(line_join_) << "\" ";
+        appendCapAndJoin(ss, cap, toSvgLineJoin(line_join_));
 
         if (line_join_ == JoinIndicator::MITER || line_join_ == JoinIndicator::UNSPECIFIED) {
             ss << "stroke-miterlimit=\"" << formatNumber(miter_limit_) << "\" ";
@@ -625,8 +624,7 @@ public:
             }
             // Round linecap for dot marks (0-length dashes); see getStrokeStyle.
             const char* cap = dashHasDot ? "round" : toSvgLineCap(edge_cap_);
-            ss << "stroke-linecap=\"" << cap << "\" ";
-            ss << "stroke-linejoin=\"" << toSvgLineJoin(edge_join_) << "\" ";
+            appendCapAndJoin(ss, cap, toSvgLineJoin(edge_join_));
 
             if (edge_join_ == JoinIndicator::MITER || edge_join_ == JoinIndicator::UNSPECIFIED) {
                 ss << "stroke-miterlimit=\"" << formatNumber(miter_limit_) << "\" ";
@@ -697,6 +695,19 @@ private:
         }
         return scaleDash(base, std::max(edge_width_, minimum_dash_unit_));
     }
+    // butt and miter are SVG's initial values, and the converter never sets a
+    // cap or join on an ancestor for them to inherit instead, so writing them
+    // on every element (~45 bytes each, tens of thousands of elements in a
+    // large illustration) changes nothing but the file size.
+    static void appendCapAndJoin(std::ostringstream& ss, const char* cap, const char* join) {
+        if (std::strcmp(cap, "butt") != 0) {
+            ss << "stroke-linecap=\"" << cap << "\" ";
+        }
+        if (std::strcmp(join, "miter") != 0) {
+            ss << "stroke-linejoin=\"" << join << "\" ";
+        }
+    }
+
     static const char* toSvgLineCap(LineCapIndicator indicator) {
         switch (indicator) {
             case LineCapIndicator::BUTT: return "butt";
