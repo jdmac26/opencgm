@@ -995,6 +995,9 @@ public:
     void setPngQuantizationEnabled(bool enabled);
     const std::vector<RasterMetrics>& rasterMetrics() const { return raster_metrics_; }
     const GeometryMetrics& geometryMetrics() const { return geometry_metrics_; }
+    // Places where the output only approximates the metafile (a fill or
+    // text-as-path fallback), one entry per cause, in the order found.
+    const std::vector<std::string>& degradations() const { return degradations_; }
     void setViewboxPaddingFraction(double fraction);
 
     /**
@@ -1272,6 +1275,7 @@ private:
     void resetPictureState();
     Color applyColourValueExtent(const Color& value) const;
     static const char* interiorStyleName(int style);
+    void reportDegradation(const std::string& message);
     // Every INTERIOR STYLE except HOLLOW (0) and EMPTY (4) paints the interior,
     // so every one of them must go through getFillAttributeForCurrentStyle().
     static bool paintsInterior(int style) { return style != 0 && style != 4; }
@@ -1677,6 +1681,7 @@ private:
     // warns once per conversion: the same unsupported style typically covers every filled
     // primitive in a metafile, and a line per shape would bury the fact rather than report it.
     std::set<int> unsupported_fill_styles_warned_;
+    std::vector<std::string> degradations_;
     bool pattern_fallback_warning_emitted_ = false;
     bool hatch_fallback_warning_emitted_ = false;
     mutable bool font_substitutions_cache_dirty_ = true;

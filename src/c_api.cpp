@@ -2401,6 +2401,18 @@ OPENCGM_API int opencgm_convert_cgm_to_svg(opencgm_ctx_t* ctx,
             return OPENCGM_ERR_GENERAL;
         }
 
+        // Rendering approximations (fill and text-as-path fallbacks). Added
+        // after the fail-on-warn check above, which keeps meaning "unsupported
+        // commands", so they are reported without changing what fails.
+        for (const auto &message : converter.degradations())
+        {
+            runtimeIssues.push_back(make_runtime_issue(
+                opencgm::ValidationSeverity::WARNING,
+                opencgm::PreservationDisposition::Degraded,
+                "rendering",
+                message));
+        }
+
         if (ctx->geometry_validate)
         {
             const auto &metrics = *geometryMetrics;
