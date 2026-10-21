@@ -107,7 +107,7 @@ TEST(SvgViewBox, AutofitCountsEveryPrimitiveBeforeCropping)
     b.element(4, 2, B::cat({B::i16(500), B::i16(500), B::i16(32000), B::i16(32000)}));  // DISJOINT POLYLINE
     const std::string svg = b.convert("s1000d");
 
-    EXPECT_DOUBLE_EQ(viewBox(svg).w, 32767.0) << "cropped to part of the drawing";
+    EXPECT_GT(viewBox(svg).w, 31500.0) << "cropped to part of the drawing";
 }
 
 namespace
@@ -144,9 +144,11 @@ TEST(SvgViewBox, AutofitStandsDownWhenAnExtentIsUnknown)
 
 TEST(SvgViewBox, FitToContentCropsAHalfCoveredSheet)
 {
-    EXPECT_DOUBLE_EQ(viewBox(halfCoveredSheet().convert("s1000d")).w, 32767.0) << "autofit alone keeps the sheet";
+    const auto noFit = [](opencgm_ctx_t *ctx) { opencgm_set_fit_to_content(ctx, 0); };
+    EXPECT_DOUBLE_EQ(viewBox(halfCoveredSheet().convert("s1000d", noFit)).w, 32767.0) << "autofit alone keeps the sheet";
 
-    const std::string svg = halfCoveredSheet().convert("s1000d", fitToContent);
+    // The default, outside WebCGM.
+    const std::string svg = halfCoveredSheet().convert("s1000d");
     const Box vb = viewBox(svg);
     const Box drawing = drawingBounds(svg);
     EXPECT_NEAR(vb.w, 13000 * 1.04, 1.0);   // the drawing plus 2% each side
@@ -158,6 +160,22 @@ TEST(SvgViewBox, FitToContentAppliesInEveryProfile)
 {
     const std::string svg = halfCoveredSheet().convert("webcgm", fitToContent);
     EXPECT_LT(viewBox(svg).w, 32767.0 / 2);
+}
+
+TEST(SvgViewBox, WebCgmFitsOnlyWhenAsked)
+{
+    EXPECT_DOUBLE_EQ(viewBox(halfCoveredSheet().convert("webcgm")).w, 32767.0);
+}
+
+TEST(SvgViewBox, DefaultFitStaysQuietWhenItCannotMeasure)
+{
+    // The warning is for callers who asked for the fit, not for every
+    // file with a tile in it.
+    CgmBuilder b = halfCoveredSheet();
+    drawHyperbolicArc(b);
+    const auto result = b.run("s1000d");
+    EXPECT_DOUBLE_EQ(viewBox(result.svg).w, 32767.0);
+    EXPECT_EQ(result.report.find("fit-to-content skipped"), std::string::npos) << result.report;
 }
 
 TEST(SvgViewBox, ABackgroundColouredFrameDoesNotHoldTheFitOpen)
@@ -185,6 +203,19 @@ TEST(SvgViewBox, FitToContentKeepsTextInside)
     const double textStart = std::stod(m[1].str());
     // 14 characters at about 0.6 of the height each must still be in view.
     EXPECT_LT(textStart + 14 * 0.6 * 600, viewBox(svg).w);
+}
+
+TEST(SvgViewBox, FitToContentKeepsThickLinesWhole)
+{
+    // Half of a 600-unit line lies outside its centre line on every side;
+    // fitting to the centre line alone cut the outer half of the stroke off.
+    CgmBuilder b(0, 0, 32767, 23170);
+    b.element(5, 3, B::fixed32(600));  // LINE WIDTH
+    b.element(4, 1, B::cat({B::i16(9000), B::i16(6000), B::i16(22000), B::i16(6000), B::i16(22000), B::i16(16000),
+                            B::i16(9000), B::i16(16000), B::i16(9000), B::i16(6000)}));
+    const Box vb = viewBox(b.convert("s1000d"));
+    EXPECT_GE(vb.w, 13000.0 + 600.0);
+    EXPECT_GE(vb.h, 10000.0 + 600.0);
 }
 
 TEST(SvgViewBox, FitToContentNeverGrowsPastThePicture)

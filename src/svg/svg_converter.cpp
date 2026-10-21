@@ -2110,31 +2110,24 @@ namespace opencgm
         double max_x = 0.0;
         double max_y = 0.0;
 
+        // How far the current primitive's ink reaches past its geometry: half
+        // its line or edge width, or half a marker. Set per primitive below.
+        double stroke_pad = 0.0;
         auto updateBounds = [&](double x, double y)
         {
             if (!has_points)
             {
-                min_x = max_x = x;
-                min_y = max_y = y;
+                min_x = x - stroke_pad;
+                max_x = x + stroke_pad;
+                min_y = y - stroke_pad;
+                max_y = y + stroke_pad;
                 has_points = true;
                 return;
             }
-            if (x < min_x)
-            {
-                min_x = x;
-            }
-            if (x > max_x)
-            {
-                max_x = x;
-            }
-            if (y < min_y)
-            {
-                min_y = y;
-            }
-            if (y > max_y)
-            {
-                max_y = y;
-            }
+            min_x = std::min(min_x, x - stroke_pad);
+            max_x = std::max(max_x, x + stroke_pad);
+            min_y = std::min(min_y, y - stroke_pad);
+            max_y = std::max(max_y, y + stroke_pad);
         };
 
         auto accumulateEllipseBounds = [&](const CGMPoint &center,
@@ -2194,6 +2187,15 @@ namespace opencgm
         int text_h_align = 0;
         bool text_upright_rightward = true;
         bool text_path_right = true;
+        double char_expansion = 1.0;
+        double char_spacing = 0.0;  // a fraction of the character height
+        // About 0.6 em per character for proportional faces, widened by
+        // CHARACTER EXPANSION FACTOR and CHARACTER SPACING.
+        auto textWidth = [&](size_t characters)
+        {
+            const double advance = std::max(0.0, 0.6 * std::abs(char_expansion) + char_spacing);
+            return advance * text_height * static_cast<double>(characters);
+        };
         const double x_direction = (vdc_x2 >= vdc_x1) ? 1.0 : -1.0;
         auto includeTextBox = [&](const CGMPoint &at, double width, double height)
         {
@@ -2233,6 +2235,17 @@ namespace opencgm
         Color line_colour = black, marker_colour = black, text_colour = black, fill_colour = black, edge_colour = black;
         int interior_style = 0;
         bool edge_visible = false;
+
+        // Line and edge widths in VDC, by the rule the renderer uses: an
+        // absolute width is VDC already (the renderer only ever draws it
+        // thinner), a scaled one multiplies the nominal width.
+        const double nominal_width_vdc =
+            std::max(std::max(std::abs(vdc_x2 - vdc_x1), std::abs(vdc_y2 - vdc_y1)) / 32768.0, 0.1);
+        auto widthInVdc = [&](double raw, SpecificationMode mode)
+        {
+            return mode == SpecificationMode::ABS ? std::abs(raw) : std::abs(raw) * nominal_width_vdc;
+        };
+        double line_width = 1.0, edge_width = 1.0, marker_size = 1.0;
         auto drawsSomething = [&](int elementId) -> bool
         {
             switch (elementId)
@@ -2282,6 +2295,7 @@ namespace opencgm
                                           std::max(1, tiles->nTilesInLineDirection()) *
                                           std::max(1, tiles->nCellsPerTileInLineDirection());
                 tile_array_measured = pathLength > 0.0 && lineLength > 0.0;
+                stroke_pad = 0.0;
                 if (tile_array_measured)
                 {
                     const int quarter = ((tiles->cellPathDirection() % 4) + 4) % 4;
@@ -2330,6 +2344,16 @@ namespace opencgm
                     text_h_align = alignment->horizontalAlignment();
                 else if (auto *path = dynamic_cast<TextPath *>(cmd.get()))
                     text_path_right = path->path() == TextPathType::RIGHT;
+                else if (auto *expansion = metricsCast<CharacterExpansionFactor, ClassCode::AttributeElements, 12>(cmd.get()))
+                    char_expansion = expansion->factor();
+                else if (auto *spacing = metricsCast<CharacterSpacing, ClassCode::AttributeElements, 13>(cmd.get()))
+                    char_spacing = spacing->spacing();
+                else if (auto *lineWidth = metricsCast<LineWidth, ClassCode::AttributeElements, 3>(cmd.get()))
+                    line_width = widthInVdc(lineWidth->width(), line_width_spec_mode_);
+                else if (auto *edgeWidth = metricsCast<EdgeWidth, ClassCode::AttributeElements, 28>(cmd.get()))
+                    edge_width = widthInVdc(edgeWidth->width(), edge_width_spec_mode_);
+                else if (auto *markerSize = metricsCast<MarkerSize, ClassCode::AttributeElements, 6>(cmd.get()))
+                    marker_size = std::abs(markerSize->size());
                 continue;
             }
             if (cmd->elementClass() != ClassCode::GraphicalPrimitiveElements)
@@ -2345,6 +2369,21 @@ namespace opencgm
             if (!drawsSomething(elementId))
             {
                 continue;
+            }
+            switch (elementId)
+            {
+            case 3:
+                stroke_pad = 0.6 * marker_size;
+                break;
+            case 4: case 5: case 6: case 9:
+                stroke_pad = 0.0;
+                break;
+            case 7: case 8: case 11: case 12: case 14: case 16: case 17: case 19:
+                stroke_pad = (edge_visible || interior_style == 0) ? 0.5 * edge_width : 0.0;
+                break;
+            default:
+                stroke_pad = 0.5 * line_width;
+                break;
             }
             switch (elementId)
             {
@@ -2509,9 +2548,7 @@ namespace opencgm
                 auto *text = metricsCast<Text, ClassCode::GraphicalPrimitiveElements, 4>(cmd.get());
                 if (text)
                 {
-                    // About 0.6 em per character for proportional faces.
-                    const double width = 0.6 * text_height * static_cast<double>(text->text().size());
-                    includeTextBox(text->position(), width, text_height);
+                    includeTextBox(text->position(), textWidth(text->text().size()), text_height);
                 }
                 break;
             }
@@ -2520,9 +2557,11 @@ namespace opencgm
                 auto *restricted = metricsCast<RestrictedText, ClassCode::GraphicalPrimitiveElements, 5>(cmd.get());
                 if (restricted)
                 {
-                    // The run is fitted to its box.
+                    // The run is fitted to its box, but spaced-out text can
+                    // still overflow it, so take the wider of the two.
                     includeTextBox(restricted->position(),
-                                   std::abs(restricted->deltaWidth()), std::abs(restricted->deltaHeight()));
+                                   std::max(std::abs(restricted->deltaWidth()), textWidth(restricted->text().size())),
+                                   std::abs(restricted->deltaHeight()));
                 }
                 break;
             }
@@ -2880,12 +2919,13 @@ namespace opencgm
             }
         }
 
-        // Explicit fit-to-content: crop to the drawing whatever its coverage,
-        // in every profile, with a margin of 2% of its larger side. A sheet
-        // whose drawing covers half the page otherwise opens in a browser as a
-        // small drawing in a sea of white. A viewcontext the file asks to be
-        // adopted still takes precedence.
-        if (fit_to_content_ && has_points && !apply_view_context_on_load_)
+        // Fit-to-content: crop to the drawing whatever its coverage, with a
+        // margin of 2% of its larger side. A sheet whose drawing covers half
+        // the page otherwise opens in a browser as a small drawing in a sea of
+        // white. On by default wherever autofit is allowed; asked for
+        // explicitly, it applies in WebCGM too. A viewcontext the file asks to
+        // be adopted still takes precedence.
+        if (fit_to_content_.value_or(allow_autofit) && has_points && !apply_view_context_on_load_)
         {
             if (bounds_complete)
             {
@@ -2894,7 +2934,8 @@ namespace opencgm
                 fit_margin_x = margin;
                 fit_margin_y = margin;
             }
-            else if (!fit_to_content_skip_reported_)
+            // Only worth a warning when the caller asked for the fit.
+            else if (fit_to_content_.has_value() && !fit_to_content_skip_reported_)
             {
                 fit_to_content_skip_reported_ = true;
                 reportDegradation("fit-to-content skipped: the picture contains elements whose extent cannot be"

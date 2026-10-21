@@ -110,13 +110,16 @@ Common options:
   illustrations typically halve. Off by default because the SVG's structure
   changes, which matters if your pipeline post-processes it. Add `--minify`
   to also remove whitespace between elements.
-- `--fit-to-content` — crop the viewBox to the drawing (plus a 2% margin)
-  instead of the whole VDC extent, so a drawing that sits in part of a
-  sheet fills the browser window. Elements drawn in the background colour,
-  such as invisible sheet frames, are ignored. When the picture contains
-  something whose extent can't be measured (tiles, symbols, segment copies),
-  the full picture is kept and the conversion report says why. Off by
-  default, since the coordinate frame changes.
+- `--fit-to-content` / `--no-fit-to-content` — whether to crop the viewBox
+  to the drawing (plus a 2% margin) instead of the whole VDC extent, so a
+  drawing that sits in part of a sheet fills the browser window. On by
+  default in every profile except `webcgm`, whose initial view is the full
+  picture; `--fit-to-content` turns it on there too. Line widths, markers
+  and text are measured; elements drawn in the background colour, such as
+  invisible sheet frames, are ignored. When the picture contains something
+  whose extent can't be measured (tiles, symbols, segment copies), the full
+  picture is kept, and if you asked for the fit the conversion report says
+  why.
 - `--geometry-log` / `--raster-log` — emit diagnostics to stderr
 
 `opencgm_cli --help` lists every flag, including watch-folder mode

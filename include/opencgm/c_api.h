@@ -53,11 +53,13 @@ extern "C" {
     OPENCGM_API void           opencgm_set_scale(opencgm_ctx_t* ctx, double scale);
 
     // Crop the viewBox to the drawing (plus a 2% margin) instead of the full
-    // VDC extent, in every profile. Without it, only a drawing covering under
-    // 20% of the picture is fitted, and only outside the WebCGM profile. If
-    // the picture holds something whose extent cannot be measured (tiles,
-    // symbols, segment copies) the full picture is kept and the conversion
-    // report says why. Default off.
+    // VDC extent. fit > 0 turns it on in every profile, including WebCGM;
+    // fit == 0 turns it off, leaving only the fit of a drawing that covers
+    // under 20% of the picture (never in WebCGM); fit < 0 restores the
+    // default, which is on in every profile except WebCGM. If the picture
+    // holds something whose extent cannot be measured (tiles, symbols,
+    // segment copies) the full picture is kept, and when the fit was asked
+    // for explicitly the conversion report says why.
     OPENCGM_API void           opencgm_set_fit_to_content(opencgm_ctx_t* ctx, int fit);
 
     // Pipeline

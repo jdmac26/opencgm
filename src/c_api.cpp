@@ -130,7 +130,7 @@ struct opencgm_ctx_t {
     bool quantize_png = false;
     bool embed_aps_metadata_json = false;
     double viewbox_padding = 0.0;
-    bool fit_to_content = false;
+    int fit_to_content = -1;  // -1 = profile default (on except in WebCGM)
     double nurbs_tolerance_svg_units = 0.5;
     int palette_override_mode = 0; // 0=none, 1=monochrome, 2=custom
 
@@ -1586,7 +1586,8 @@ static ConverterSetup configure_svg_converter(opencgm_ctx_t* ctx,
     converter.setWidthLoggingEnabled(ctx->width_logging);
     converter.setPngQuantizationEnabled(ctx->quantize_png);
     converter.setViewboxPaddingFraction(ctx->viewbox_padding);
-    converter.setFitToContent(ctx->fit_to_content);
+    converter.setFitToContent(ctx->fit_to_content < 0 ? std::nullopt
+                                                      : std::optional<bool>(ctx->fit_to_content != 0));
     converter.setNurbsToleranceSvgUnits(ctx->nurbs_tolerance_svg_units);
     converter.setTargetDpi(ctx->dpi);
     converter.setRasterEncoding(
@@ -1827,7 +1828,7 @@ OPENCGM_API void opencgm_set_yflip_mode(opencgm_ctx_t* ctx, int mode) {
 
 OPENCGM_API void opencgm_set_fit_to_content(opencgm_ctx_t* ctx, int fit) {
     if (ctx) {
-        ctx->fit_to_content = (fit != 0);
+        ctx->fit_to_content = fit < 0 ? -1 : (fit != 0);
     }
 }
 

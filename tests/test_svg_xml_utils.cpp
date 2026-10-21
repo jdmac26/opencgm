@@ -55,12 +55,36 @@ namespace
         opencgm::svg::UniqueIdAllocator allocator("aps");
 
         EXPECT_EQ(allocator.allocate("panel"), "panel");
-        EXPECT_EQ(allocator.allocate("panel"), "panel_2");
+        EXPECT_EQ(allocator.allocate("panel"), "panela");
         EXPECT_EQ(allocator.allocate(""), "aps");
-        EXPECT_EQ(allocator.allocate(""), "aps_2");
+        EXPECT_EQ(allocator.allocate(""), "apsa");
 
         allocator.reset();
         EXPECT_EQ(allocator.allocate("panel"), "panel");
         EXPECT_EQ(allocator.allocate(""), "aps");
+    }
+
+    TEST(SvgXmlUtilsTest, RepeatedIdentifiersTakeLetterSuffixes)
+    {
+        // Tech-pubs convention: hot-150, hot-150a, hot-150b ... z, aa.
+        opencgm::svg::UniqueIdAllocator allocator("aps");
+        EXPECT_EQ(allocator.allocate("hot-150"), "hot-150");
+        EXPECT_EQ(allocator.allocate("hot-150"), "hot-150a");
+        EXPECT_EQ(allocator.allocate("hot-150"), "hot-150b");
+        for (char c = 'c'; c <= 'z'; ++c)
+            EXPECT_EQ(allocator.allocate("hot-150"), std::string("hot-150") + c);
+        EXPECT_EQ(allocator.allocate("hot-150"), "hot-150aa");
+        EXPECT_EQ(allocator.allocate("hot-150"), "hot-150ab");
+    }
+
+    TEST(SvgXmlUtilsTest, LetterSuffixesSkipIdentifiersAlreadyInUse)
+    {
+        // The file names one hotspot hot-7a itself; the repeat of hot-7
+        // must not collide with it.
+        opencgm::svg::UniqueIdAllocator allocator("aps");
+        EXPECT_EQ(allocator.allocate("hot-7a"), "hot-7a");
+        EXPECT_EQ(allocator.allocate("hot-7"), "hot-7");
+        EXPECT_EQ(allocator.allocate("hot-7"), "hot-7b");
+        EXPECT_EQ(allocator.allocate("hot-7a"), "hot-7aa");
     }
 }
