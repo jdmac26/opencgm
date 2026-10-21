@@ -264,12 +264,24 @@ namespace opencgm::svg
             return base;
         }
 
+        // Repeats take a letter, as tech-pubs hotspot IDs do: hot-150,
+        // hot-150a, hot-150b ... hot-150z, hot-150aa. counter is the number
+        // of letters handed out so far, plus one for the bare base.
+        const auto letters = [](size_t n)
+        {
+            std::string s;
+            for (; n > 0; n = (n - 1) / 26)
+            {
+                s.insert(s.begin(), static_cast<char>('a' + (n - 1) % 26));
+            }
+            return s;
+        };
         size_t suffix = counter;
         std::string unique;
         do
         {
+            unique = base + letters(suffix);
             ++suffix;
-            unique = base + "_" + std::to_string(suffix);
         } while (!allocated_.insert(unique).second);
 
         counter = suffix;
