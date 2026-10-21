@@ -4,6 +4,7 @@
 #include "opencgm/interfaces.h"
 #include "opencgm/cgm_file.h"
 #include "opencgm/security_limits.h"
+#include <algorithm>
 #include <sstream>
 
 namespace opencgm {
@@ -182,10 +183,12 @@ void NonUniformBSpline::readFromBinary(IBinaryReader& reader) {
         controlPoints_.push_back(reader.readPoint());
     }
 
-    int numKnots = reader.readInt();
+    // ISO/IEC 8632-3: the knot list is not counted; it holds
+    // order + number-of-control-points reals.
+    const int numKnots = numControlPoints + splineOrder_;
     // SECURITY: Validate knot count before allocation
     security::validateAllocationSize(
-        static_cast<size_t>(numKnots),
+        static_cast<size_t>(std::max(numKnots, 0)),
         security::MAX_SPLINE_KNOTS,
         "B-Spline knots"
     );
@@ -206,7 +209,6 @@ void NonUniformBSpline::writeAsBinary(IBinaryWriter& writer) {
         writer.writePoint(pt);
     }
 
-    writer.writeInt(static_cast<int>(knots_.size()));
     for (double knot : knots_) {
         writer.writeReal(knot);
     }
@@ -270,15 +272,14 @@ void NonUniformRationalBSpline::readFromBinary(IBinaryReader& reader) {
         controlPoints_.push_back(reader.readPoint());
     }
 
-    weights_.reserve(numControlPoints);
-    for (int i = 0; i < numControlPoints; i++) {
-        weights_.push_back(reader.readReal());
-    }
-
-    int numKnots = reader.readInt();
+    // ISO/IEC 8632-3: knots (order + number-of-control-points, uncounted),
+    // the parameter range, then one weight per control point. Reading the
+    // weights first took knot values as weights, so zero-weighted spans
+    // drew rays to the origin.
+    const int numKnots = numControlPoints + splineOrder_;
     // SECURITY: Validate knot count before allocation
     security::validateAllocationSize(
-        static_cast<size_t>(numKnots),
+        static_cast<size_t>(std::max(numKnots, 0)),
         security::MAX_SPLINE_KNOTS,
         "Rational B-Spline knots"
     );
@@ -289,6 +290,11 @@ void NonUniformRationalBSpline::readFromBinary(IBinaryReader& reader) {
 
     startParameter_ = reader.readReal();
     endParameter_ = reader.readReal();
+
+    weights_.reserve(numControlPoints);
+    for (int i = 0; i < numControlPoints; i++) {
+        weights_.push_back(reader.readReal());
+    }
 }
 
 void NonUniformRationalBSpline::writeAsBinary(IBinaryWriter& writer) {
@@ -299,17 +305,16 @@ void NonUniformRationalBSpline::writeAsBinary(IBinaryWriter& writer) {
         writer.writePoint(pt);
     }
 
-    for (double weight : weights_) {
-        writer.writeReal(weight);
-    }
-
-    writer.writeInt(static_cast<int>(knots_.size()));
     for (double knot : knots_) {
         writer.writeReal(knot);
     }
 
     writer.writeReal(startParameter_);
     writer.writeReal(endParameter_);
+
+    for (double weight : weights_) {
+        writer.writeReal(weight);
+    }
 }
 
 void NonUniformRationalBSpline::writeAsClearText(IClearTextWriter& writer) {

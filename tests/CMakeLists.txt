@@ -48,6 +48,7 @@ add_executable(opencgm_tests
     test_aps_text_decoder.cpp
     test_output_compactor.cpp
     test_png_encoder.cpp
+    test_metafile_encoding.cpp
     test_svg_semantic_contracts.cpp
     test_svg_fills.cpp
     test_svg_text_and_arcs.cpp

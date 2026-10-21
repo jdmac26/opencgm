@@ -64,6 +64,10 @@ public:
 
     const std::vector<CommandPtr>& defaultsReplacementCommands() const { return defaultsReplacementCommands_; }
     void setDefaultsReplacementCommands(std::vector<CommandPtr> commands) { defaultsReplacementCommands_ = std::move(commands); }
+    void appendDefaultsReplacementCommands(std::vector<CommandPtr> commands) {
+        for (auto &command : commands)
+            defaultsReplacementCommands_.push_back(std::move(command));
+    }
 
     /**
      * @brief Get all messages generated during processing

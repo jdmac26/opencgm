@@ -11531,6 +11531,17 @@ void SVGConverter::initializeDefaultFontOptions()
         };
         const std::string pathData = approximator.generateSvgPath(segments, transformFunc);
 
+        if (in_figure_)
+        {
+            // Part of a closed figure's boundary: the figure fills and edges it.
+            const std::string fragment = pathData + " ";
+            figure_path_fragments_.push_back(fragment);
+            figure_ordered_subpaths_.push_back({fragment, transformFunc(segments.front().p0),
+                                                transformFunc(segments.back().p3), pending_connect_to_prev_});
+            pending_connect_to_prev_ = false;
+            return;
+        }
+
         svg_output_ << "  <path d=\"" << pathData << "\" "
                     << current_style_.getStrokeStyle()
                     << "fill=\"none\"" << debugCommandAttribute() << " />\n";
