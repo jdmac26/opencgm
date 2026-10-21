@@ -22,6 +22,7 @@
 #include <map>
 #include <vector>
 #include <optional>
+#include <array>
 #include <iostream>
 #include <utility>
 #include <cmath>
@@ -1284,6 +1285,11 @@ private:
     Color applyColourValueExtent(const Color& value) const;
     static const char* interiorStyleName(int style);
     void reportDegradation(const std::string& message);
+    // Region and viewcontext SDRs hold VDC values in the file's VDC format.
+    // A region comes back as its outline in VDC: rectangles as two corners,
+    // ellipses and Bezier regions sampled into a polygon. Empty if undecodable.
+    std::vector<CGMPoint> decodeRegionSdr(const std::string& data) const;
+    std::optional<std::array<double, 4>> decodeViewContextSdr(const std::string& data) const;
     // Every INTERIOR STYLE except HOLLOW (0) and EMPTY (4) paints the interior,
     // so every one of them must go through getFillAttributeForCurrentStyle().
     static bool paintsInterior(int style) { return style != 0 && style != 4; }

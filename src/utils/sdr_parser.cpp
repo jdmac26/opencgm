@@ -644,4 +644,185 @@ std::vector<std::string> SDRParser::decodeLinkuriStructuredData(const std::strin
     return components;
 }
 
+namespace {
+
+// Walks the members of a binary SDR (ISO/IEC 8632-3 8.1): each is a data type
+// (IX), a count (I), then that many values, numbers encoded as the metafile
+// says. Only the numeric types a region or viewcontext can hold are read.
+class SdrMembers {
+public:
+    SdrMembers(const std::string& data, const SDRParser::NumberFormat& format)
+        : data_(data), format_(format) {}
+
+    bool atEnd() const { return at_ >= data_.size(); }
+
+    // The next member's values, or std::nullopt for a type this walker
+    // cannot size (the rest of the record is then unreadable).
+    std::optional<std::pair<int, std::vector<double>>> next() {
+        const auto type = readSigned(format_.indexBits);
+        const auto count = readSigned(format_.integerBits);
+        if (!type || !count || *count < 0 || *count > 100000) {
+            return std::nullopt;
+        }
+        std::vector<double> values;
+        values.reserve(static_cast<size_t>(*count));
+        for (int64_t i = 0; i < *count; ++i) {
+            const auto value = readValue(static_cast<int>(*type));
+            if (!value) {
+                return std::nullopt;
+            }
+            values.push_back(*value);
+        }
+        return std::make_pair(static_cast<int>(*type), std::move(values));
+    }
+
+private:
+    std::optional<uint64_t> readUnsigned(int bytes) {
+        if (bytes <= 0 || bytes > 8 || at_ + static_cast<size_t>(bytes) > data_.size()) {
+            return std::nullopt;
+        }
+        uint64_t value = 0;
+        for (int i = 0; i < bytes; ++i) {
+            value = (value << 8) | static_cast<uint8_t>(data_[at_++]);
+        }
+        return value;
+    }
+
+    std::optional<int64_t> readSigned(int bits) {
+        const int bytes = bits / 8;
+        const auto raw = readUnsigned(bytes);
+        if (!raw) {
+            return std::nullopt;
+        }
+        const int shift = 64 - bits;
+        return static_cast<int64_t>(*raw << shift) >> shift;
+    }
+
+    std::optional<double> readReal(Precision precision) {
+        switch (precision) {
+        case Precision::Floating_32: {
+            const auto raw = readUnsigned(4);
+            if (!raw) return std::nullopt;
+            const uint32_t bits = static_cast<uint32_t>(*raw);
+            float value;
+            std::memcpy(&value, &bits, sizeof(value));
+            return static_cast<double>(value);
+        }
+        case Precision::Floating_64: {
+            const auto raw = readUnsigned(8);
+            if (!raw) return std::nullopt;
+            double value;
+            std::memcpy(&value, &*raw, sizeof(value));
+            return value;
+        }
+        case Precision::Fixed_32: {
+            const auto whole = readSigned(16);
+            const auto fraction = readUnsigned(2);
+            if (!whole || !fraction) return std::nullopt;
+            return static_cast<double>(*whole) + static_cast<double>(*fraction) / 65536.0;
+        }
+        case Precision::Fixed_64: {
+            const auto whole = readSigned(32);
+            const auto fraction = readUnsigned(4);
+            if (!whole || !fraction) return std::nullopt;
+            return static_cast<double>(*whole) + static_cast<double>(*fraction) / 4294967296.0;
+        }
+        }
+        return std::nullopt;
+    }
+
+    std::optional<double> readValue(int type) {
+        std::optional<int64_t> integer;
+        switch (type) {
+        case 5:  integer = readSigned(16); break;                    // E
+        case 6:  integer = readSigned(format_.integerBits); break;   // I
+        case 8:  integer = readSigned(8); break;                     // IF8
+        case 9:  integer = readSigned(16); break;                    // IF16
+        case 10: integer = readSigned(32); break;                    // IF32
+        case 11: integer = readSigned(format_.indexBits); break;     // IX
+        case 12: return readReal(format_.real);                      // R
+        case 16:                                                     // VDC
+            if (!format_.vdcInteger) return readReal(format_.vdcReal);
+            integer = readSigned(format_.vdcIntegerBits);
+            break;
+        case 18: { auto u = readUnsigned(1); if (!u) return std::nullopt; return static_cast<double>(*u); }  // UI8
+        case 19: { auto u = readUnsigned(4); if (!u) return std::nullopt; return static_cast<double>(*u); }  // UI32
+        case 22: { auto u = readUnsigned(2); if (!u) return std::nullopt; return static_cast<double>(*u); }  // UI16
+        default: return std::nullopt;
+        }
+        if (!integer) return std::nullopt;
+        return static_cast<double>(*integer);
+    }
+
+    const std::string& data_;
+    const SDRParser::NumberFormat& format_;
+    size_t at_ = 0;
+};
+
+} // namespace
+
+std::optional<SDRParser::Region> SDRParser::parseRegion(const std::string& binaryData,
+                                                        const NumberFormat& format) {
+    SdrMembers members(binaryData, format);
+    const auto first = members.next();
+    if (!first || first->second.size() != 1) {
+        return std::nullopt;
+    }
+    const int type = static_cast<int>(first->second.front());
+    if (type < 1 || type > 4) {
+        return std::nullopt;
+    }
+
+    std::vector<double> coordinates;
+    while (!members.atEnd()) {
+        const auto member = members.next();
+        if (!member) {
+            return std::nullopt;
+        }
+        coordinates.insert(coordinates.end(), member->second.begin(), member->second.end());
+    }
+
+    Region region;
+    region.type = static_cast<RegionType>(type);
+    for (size_t i = 0; i + 1 < coordinates.size(); i += 2) {
+        if (!std::isfinite(coordinates[i]) || !std::isfinite(coordinates[i + 1])) {
+            return std::nullopt;
+        }
+        region.points.emplace_back(coordinates[i], coordinates[i + 1]);
+    }
+
+    const size_t minimum = region.type == RegionType::Rectangle ? 2
+                         : region.type == RegionType::Ellipse   ? 3
+                         : region.type == RegionType::Polygon   ? 3
+                                                                : 4;
+    if (region.points.size() < minimum) {
+        return std::nullopt;
+    }
+    return region;
+}
+
+std::optional<SDRParser::ViewContextRect> SDRParser::parseViewContextRect(const std::string& binaryData,
+                                                                          const NumberFormat& format) {
+    SdrMembers members(binaryData, format);
+    while (!members.atEnd()) {
+        const auto member = members.next();
+        if (!member) {
+            return std::nullopt;
+        }
+        if ((member->first == 16 || member->first == 12) && member->second.size() >= 4) {
+            const auto& v = member->second;
+            if (!std::isfinite(v[0]) || !std::isfinite(v[1]) || !std::isfinite(v[2]) || !std::isfinite(v[3])) {
+                return std::nullopt;
+            }
+            ViewContextRect rect;
+            rect.minX = v[0];
+            rect.minY = v[1];
+            rect.maxX = v[2];
+            rect.maxY = v[3];
+            return rect;
+        }
+    }
+    return std::nullopt;
+}
+
 } // namespace opencgm

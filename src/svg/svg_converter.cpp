@@ -2855,9 +2855,9 @@ namespace opencgm
                 }
 
                 bool parsed = false;
-                if (auto rect = SDRParser::parseViewContextRect(attr->data()))
+                if (auto rect = decodeViewContextSdr(attr->data()))
                 {
-                    parsed = assignViewContextRect(rect->minX, rect->minY, rect->maxX, rect->maxY);
+                    parsed = assignViewContextRect((*rect)[0], (*rect)[1], (*rect)[2], (*rect)[3]);
                 }
 
                 if (!parsed)
@@ -9696,6 +9696,93 @@ namespace opencgm
         return buffer.str();
     }
 
+    namespace
+    {
+        SDRParser::NumberFormat sdrNumberFormat(const CGMFile *file)
+        {
+            SDRParser::NumberFormat format;
+            if (!file)
+                return format;
+            format.vdcInteger = file->vdcType() == VDCType::Integer;
+            format.vdcIntegerBits = file->vdcIntegerPrecision();
+            format.vdcReal = file->vdcRealPrecision();
+            format.integerBits = file->integerPrecision();
+            format.indexBits = file->indexPrecision();
+            format.real = file->realPrecision();
+            return format;
+        }
+    }
+
+    std::vector<CGMPoint> SVGConverter::decodeRegionSdr(const std::string &data) const
+    {
+        std::vector<CGMPoint> outline;
+        const auto region = SDRParser::parseRegion(data, sdrNumberFormat(cgm_file_));
+        if (!region)
+        {
+            // Not a well-formed record: keep the old reading, IEEE single
+            // coordinates found by scanning.
+            for (const auto &[x, y] : SDRParser::parseRegionCoordinates(data))
+                outline.emplace_back(x, y);
+            return outline;
+        }
+
+        const auto &p = region->points;
+        switch (region->type)
+        {
+        case SDRParser::RegionType::Rectangle:
+            // Two corners; the region geometry expands them.
+            outline.emplace_back(p[0].first, p[0].second);
+            outline.emplace_back(p[1].first, p[1].second);
+            break;
+        case SDRParser::RegionType::Ellipse:
+        {
+            // Centre, then the ends of two conjugate diameters.
+            const double cx = p[0].first, cy = p[0].second;
+            const double ux = p[1].first - cx, uy = p[1].second - cy;
+            const double vx = p[2].first - cx, vy = p[2].second - cy;
+            const int steps = 48;
+            for (int i = 0; i < steps; ++i)
+            {
+                const double t = 2.0 * 3.14159265358979323846 * i / steps;
+                outline.emplace_back(cx + std::cos(t) * ux + std::sin(t) * vx,
+                                     cy + std::cos(t) * uy + std::sin(t) * vy);
+            }
+            break;
+        }
+        case SDRParser::RegionType::PolyBezier:
+        {
+            // Continuous cubic Beziers: a start point, then three per segment.
+            outline.emplace_back(p[0].first, p[0].second);
+            for (size_t i = 0; i + 3 < p.size(); i += 3)
+            {
+                for (int step = 1; step <= 8; ++step)
+                {
+                    const double t = step / 8.0, s = 1.0 - t;
+                    const double a = s * s * s, b = 3 * s * s * t, c = 3 * s * t * t, d = t * t * t;
+                    outline.emplace_back(a * p[i].first + b * p[i + 1].first + c * p[i + 2].first + d * p[i + 3].first,
+                                         a * p[i].second + b * p[i + 1].second + c * p[i + 2].second + d * p[i + 3].second);
+                }
+            }
+            break;
+        }
+        case SDRParser::RegionType::Polygon:
+            for (const auto &[x, y] : p)
+                outline.emplace_back(x, y);
+            break;
+        }
+        return outline;
+    }
+
+    std::optional<std::array<double, 4>> SVGConverter::decodeViewContextSdr(const std::string &data) const
+    {
+        auto rect = SDRParser::parseViewContextRect(data, sdrNumberFormat(cgm_file_));
+        if (!rect)
+            rect = SDRParser::parseViewContextRect(data);
+        if (!rect)
+            return std::nullopt;
+        return std::array<double, 4>{rect->minX, rect->minY, rect->maxX, rect->maxY};
+    }
+
     void SVGConverter::reportDegradation(const std::string &message)
     {
         // Still printed, as before, for command-line users; also kept so the
@@ -11735,13 +11822,13 @@ void SVGConverter::initializeDefaultFontOptions()
             bool treatAsBinary = cmd->isBinaryData() || SDRParser::isBinarySDR(attrData);
             if (treatAsBinary)
             {
-                if (auto rect = SDRParser::parseViewContextRect(attrData))
+                if (auto rect = decodeViewContextSdr(attrData))
                 {
                     if (auto ordered = svg::ApsGeometry::orderedRect(
-                            rect->minX,
-                            rect->minY,
-                            rect->maxX,
-                            rect->maxY))
+                            (*rect)[0],
+                            (*rect)[1],
+                            (*rect)[2],
+                            (*rect)[3]))
                     {
                         assignViewAttributes(*ordered);
                         return;
@@ -11780,13 +11867,13 @@ void SVGConverter::initializeDefaultFontOptions()
 
             if (!treatAsBinary && SDRParser::isBinarySDR(attrData))
             {
-                if (auto rect = SDRParser::parseViewContextRect(attrData))
+                if (auto rect = decodeViewContextSdr(attrData))
                 {
                     if (auto ordered = svg::ApsGeometry::orderedRect(
-                            rect->minX,
-                            rect->minY,
-                            rect->maxX,
-                            rect->maxY))
+                            (*rect)[0],
+                            (*rect)[1],
+                            (*rect)[2],
+                            (*rect)[3]))
                     {
                         assignViewAttributes(*ordered);
                         return;
@@ -12112,17 +12199,13 @@ void SVGConverter::initializeDefaultFontOptions()
 
                 if (binaryRegion)
                 {
-                    auto vdcCoordinates = SDRParser::parseRegionCoordinates(attr.second);
-                    if (!vdcCoordinates.empty())
+                    const auto vdcOutline = decodeRegionSdr(attr.second);
+                    if (!vdcOutline.empty())
                     {
-                        for (const auto &coordinate : vdcCoordinates)
+                        for (const auto &point : vdcOutline)
                         {
                             double svg_x, svg_y;
-                            transform_.transform(
-                                coordinate.first,
-                                coordinate.second,
-                                svg_x,
-                                svg_y);
+                            transform_.transform(point.x(), point.y(), svg_x, svg_y);
                             parsedPoints.emplace_back(svg_x, svg_y);
                         }
                     }
