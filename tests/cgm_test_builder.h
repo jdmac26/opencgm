@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -32,6 +33,20 @@ namespace opencgm_test
             element(0, 3, str("P"));                     // BEGIN PICTURE
             element(2, 6, cat({i16(x1), i16(y1), i16(x2), i16(y2)}));  // VDC EXTENT
             element(0, 4, {});                           // BEGIN PICTURE BODY
+        }
+
+        // No header at all: the test writes the metafile and picture
+        // descriptors itself, up to and including BEGIN PICTURE BODY.
+        struct Bare {};
+        explicit CgmBuilder(Bare) {}
+
+        static std::vector<uint8_t> f32(float v)
+        {
+            uint32_t bits;
+            static_assert(sizeof(bits) == sizeof(v), "IEEE single");
+            std::memcpy(&bits, &v, sizeof(bits));
+            return {static_cast<uint8_t>(bits >> 24), static_cast<uint8_t>(bits >> 16),
+                    static_cast<uint8_t>(bits >> 8), static_cast<uint8_t>(bits)};
         }
 
         static std::vector<uint8_t> i16(int v)

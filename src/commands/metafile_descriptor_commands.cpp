@@ -448,32 +448,57 @@ void MetafileDefaultsReplacement::readFromBinary(IBinaryReader& reader) {
     }
 
     if (!container_ || defaultsData_.empty()) {
-        if (container_) {
-            container_->setDefaultsReplacementCommands({});
-        }
         return;
     }
 
     std::string buffer(reinterpret_cast<const char*>(defaultsData_.data()), defaultsData_.size());
     std::istringstream stream(buffer, std::ios::binary);
 
+    // The embedded elements are encoded with the metafile's precisions as they
+    // stand, and a precision element among them (VDC REAL PRECISION, say)
+    // governs everything after it, in this list and in the pictures. So the
+    // scratch file starts from the metafile's decoding state and hands any
+    // change back. It used to start from the defaults, which read a float
+    // VDC EXTENT as integers and left floating-point VDC decoded as fixed.
+    const auto copyDecodingState = [](const CGMFile& from, CGMFile& to) {
+        to.setVdcType(from.vdcType());
+        to.setIntegerPrecision(from.integerPrecision());
+        to.setRealPrecision(from.realPrecision());
+        to.setRealPrecisionProcessed(from.realPrecisionProcessed());
+        to.setIndexPrecision(from.indexPrecision());
+        to.setColourPrecision(from.colourPrecision());
+        to.setColourIndexPrecision(from.colourIndexPrecision());
+        to.setNamePrecision(from.namePrecision());
+        to.setVdcIntegerPrecision(from.vdcIntegerPrecision());
+        to.setVdcRealPrecision(from.vdcRealPrecision());
+        to.setColorSelectionMode(from.colorSelectionMode());
+        to.setColorModel(from.colorModel());
+        to.setLineWidthSpecificationMode(from.lineWidthSpecificationMode());
+        to.setEdgeWidthSpecificationMode(from.edgeWidthSpecificationMode());
+        to.setMarkerSizeSpecificationMode(from.markerSizeSpecificationMode());
+        to.setInteriorStyleSpecificationMode(from.interiorStyleSpecificationMode());
+    };
+
     try {
         DefaultCommandFactory factory;
         BinaryCGMFile temp;
+        copyDecodingState(*container_, temp);
         DefaultBinaryReader defaultsReader(stream, &temp, &factory);
         defaultsReader.readCommands();
+        copyDecodingState(temp, *container_);
 
-        auto& parsed = temp.commands();
+        // A metafile may carry several replacements; they accumulate.
         std::vector<CommandPtr> defaults;
+        auto& parsed = temp.commands();
         defaults.reserve(parsed.size());
         for (auto& cmd : parsed) {
             defaults.push_back(std::move(cmd));
         }
         parsed.clear();
 
-        container_->setDefaultsReplacementCommands(std::move(defaults));
+        container_->appendDefaultsReplacementCommands(std::move(defaults));
     } catch (const std::exception&) {
-        container_->setDefaultsReplacementCommands({});
+        // Keep whatever earlier replacements supplied.
     }
 }
 
