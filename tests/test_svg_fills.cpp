@@ -13,18 +13,21 @@ namespace
     using opencgm_test::CgmBuilder;
     using B = CgmBuilder;
 
-    // The fill attribute of the first element with this tag, or "<missing>".
-    std::string fillOf(const std::string &svg, const std::string &tag)
+    // An attribute of the first element with this tag, or "<missing>".
+    std::string attributeOf(const std::string &svg, const std::string &tag, const std::string &name)
     {
         std::smatch element;
         if (!std::regex_search(svg, element, std::regex("<" + tag + "\\b[^>]*>")))
             return "<no " + tag + ">";
-        std::smatch fill;
+        std::smatch value;
         const std::string text = element.str();
-        if (!std::regex_search(text, fill, std::regex(" fill=\"([^\"]*)\"")))
+        if (!std::regex_search(text, value, std::regex(" " + name + "=\"([^\"]*)\"")))
             return "<missing>";
-        return fill[1].str();
+        return value[1].str();
     }
+
+    std::string fillOf(const std::string &svg, const std::string &tag) { return attributeOf(svg, tag, "fill"); }
+    std::string strokeOf(const std::string &svg, const std::string &tag) { return attributeOf(svg, tag, "stroke"); }
 
     void drawShapes(CgmBuilder &b)
     {
@@ -152,4 +155,25 @@ TEST(SvgFills, HollowAndEmptyStayUnfilled)
         EXPECT_EQ(fillOf(svg, "circle"), "none") << "style " << style;
         EXPECT_EQ(fillOf(svg, "ellipse"), "none") << "style " << style;
     }
+}
+
+TEST(SvgFills, HollowShapesKeepTheirOutlineWithEdgesOff)
+{
+    // HOLLOW is defined by its outline, so EDGE VISIBILITY off (the default)
+    // must not hide it. Circles and ellipses used to come out with no fill
+    // and no stroke, invisible, while rectangles drew their outline.
+    CgmBuilder b;
+    b.element(5, 22, B::i16(0));  // INTERIOR STYLE hollow
+    drawShapes(b);
+    const std::string svg = b.convert();
+    for (const char *tag : {"rect", "circle", "ellipse"})
+        EXPECT_NE(strokeOf(svg, tag), "none") << tag;
+
+    // EMPTY, by contrast, draws nothing unless the edge is turned on.
+    CgmBuilder empty;
+    empty.element(5, 22, B::i16(4));
+    drawShapes(empty);
+    const std::string emptySvg = empty.convert();
+    for (const char *tag : {"circle", "ellipse"})
+        EXPECT_EQ(strokeOf(emptySvg, tag), "none") << tag;
 }

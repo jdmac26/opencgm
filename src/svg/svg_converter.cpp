@@ -4158,7 +4158,9 @@ namespace opencgm
 
         // In compatibility mode, for unfilled shapes (HOLLOW=0 or EMPTY=4), assume edges
         // should be visible since otherwise the shape would be completely invisible
-        bool effectiveEdgeVis = edgeVis;
+        // HOLLOW is defined by its outline, so it is drawn whatever EDGE
+        // VISIBILITY says (ISO 8632-1 §6.5.18); getEdgeStyle() follows the same rule.
+        bool effectiveEdgeVis = edgeVis || fillStyle == 0;
         if (compatibility_mode_ && !edgeVis && (fillStyle == 0 || fillStyle == 4))
         {
             effectiveEdgeVis = true;
@@ -4257,7 +4259,9 @@ namespace opencgm
         }
 
         int fillStyle = current_style_.fillStyle();
-        bool edgeVis = current_style_.edgeVisibility();
+        // HOLLOW is defined by its outline, so it is drawn whatever EDGE
+        // VISIBILITY says (ISO 8632-1 §6.5.18); getEdgeStyle() follows the same rule.
+        bool edgeVis = current_style_.edgeVisibility() || fillStyle == 0;
         std::string fillAttr;
         if (paintsInterior(fillStyle))
         {
