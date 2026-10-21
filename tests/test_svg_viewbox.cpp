@@ -110,16 +110,102 @@ TEST(SvgViewBox, AutofitCountsEveryPrimitiveBeforeCropping)
     EXPECT_DOUBLE_EQ(viewBox(svg).w, 32767.0) << "cropped to part of the drawing";
 }
 
+namespace
+{
+    // A hyperbolic arc: drawn, but its extent is not measured by the bounds pass.
+    void drawHyperbolicArc(CgmBuilder &b)
+    {
+        b.element(4, 22, B::cat({B::i16(2000), B::i16(2000), B::i16(500), B::i16(0), B::i16(0), B::i16(500),
+                                 B::i16(2500), B::i16(2000), B::i16(2000), B::i16(2500)}));
+    }
+
+    const auto fitToContent = [](opencgm_ctx_t *ctx) { opencgm_set_fit_to_content(ctx, 1); };
+
+    // An A-size sheet whose drawing covers about 40% of each axis: too much
+    // for autofit, the common case on a tech-pubs sheet.
+    CgmBuilder halfCoveredSheet()
+    {
+        CgmBuilder b(0, 0, 32767, 23170);
+        b.element(4, 1, B::cat({B::i16(9000), B::i16(6000), B::i16(22000), B::i16(6000), B::i16(22000), B::i16(16000),
+                                B::i16(9000), B::i16(16000), B::i16(9000), B::i16(6000)}));
+        return b;
+    }
+}
+
 TEST(SvgViewBox, AutofitStandsDownWhenAnExtentIsUnknown)
 {
-    // Plain TEXT has no extent the bounds pass can measure, so a crop could
-    // cut it off; keep the full picture instead.
     CgmBuilder b(0, 0, 32767, 32767);
     drawSmallSquare(b);
-    b.element(4, 4, B::cat({B::i16(1500), B::i16(1500), B::i16(1), B::str("label")}));  // TEXT
+    drawHyperbolicArc(b);
     const std::string svg = b.convert("s1000d");
 
     EXPECT_DOUBLE_EQ(viewBox(svg).w, 32767.0);
+}
+
+TEST(SvgViewBox, FitToContentCropsAHalfCoveredSheet)
+{
+    EXPECT_DOUBLE_EQ(viewBox(halfCoveredSheet().convert("s1000d")).w, 32767.0) << "autofit alone keeps the sheet";
+
+    const std::string svg = halfCoveredSheet().convert("s1000d", fitToContent);
+    const Box vb = viewBox(svg);
+    const Box drawing = drawingBounds(svg);
+    EXPECT_NEAR(vb.w, 13000 * 1.04, 1.0);   // the drawing plus 2% each side
+    EXPECT_GT(drawing.w / vb.w, 0.95);
+    EXPECT_GT(drawing.h / vb.h, 0.9);
+}
+
+TEST(SvgViewBox, FitToContentAppliesInEveryProfile)
+{
+    const std::string svg = halfCoveredSheet().convert("webcgm", fitToContent);
+    EXPECT_LT(viewBox(svg).w, 32767.0 / 2);
+}
+
+TEST(SvgViewBox, ABackgroundColouredFrameDoesNotHoldTheFitOpen)
+{
+    // Authoring tools often frame the whole sheet in the background colour.
+    CgmBuilder b = halfCoveredSheet();
+    b.element(5, 4, {0});  // LINE COLOUR index 0, the background
+    b.element(4, 1, B::cat({B::i16(10), B::i16(10), B::i16(32757), B::i16(10), B::i16(32757), B::i16(23160),
+                            B::i16(10), B::i16(23160), B::i16(10), B::i16(10)}));
+    const std::string svg = b.convert("s1000d", fitToContent);
+
+    EXPECT_NEAR(viewBox(svg).w, 13000 * 1.04, 1.0);
+}
+
+TEST(SvgViewBox, FitToContentKeepsTextInside)
+{
+    // A label starting to the right of the drawing, in plain TEXT.
+    CgmBuilder b = halfCoveredSheet();
+    b.element(5, 15, B::i16(600));  // CHARACTER HEIGHT
+    b.element(4, 4, B::cat({B::i16(23000), B::i16(10000), B::i16(1), B::str("FIG 1 ASSEMBLY")}));
+    const std::string svg = b.convert("s1000d", fitToContent);
+
+    std::smatch m;
+    ASSERT_TRUE(std::regex_search(svg, m, std::regex("<text x=\"([-0-9.e]+)\"")));
+    const double textStart = std::stod(m[1].str());
+    // 14 characters at about 0.6 of the height each must still be in view.
+    EXPECT_LT(textStart + 14 * 0.6 * 600, viewBox(svg).w);
+}
+
+TEST(SvgViewBox, FitToContentNeverGrowsPastThePicture)
+{
+    CgmBuilder b(0, 0, 32767, 23170);
+    b.element(4, 1, B::cat({B::i16(0), B::i16(0), B::i16(32767), B::i16(23170)}));
+    const std::string svg = b.convert("s1000d", fitToContent);
+
+    EXPECT_DOUBLE_EQ(viewBox(svg).w, 32767.0);
+    EXPECT_DOUBLE_EQ(viewBox(svg).h, 23170.0);
+}
+
+TEST(SvgViewBox, FitToContentSaysWhyItKeptThePicture)
+{
+    CgmBuilder b = halfCoveredSheet();
+    drawHyperbolicArc(b);
+    const auto result = b.run("s1000d", fitToContent);
+
+    ASSERT_EQ(result.status, OPENCGM_OK) << result.error;
+    EXPECT_DOUBLE_EQ(viewBox(result.svg).w, 32767.0);
+    EXPECT_NE(result.report.find("fit-to-content skipped"), std::string::npos) << result.report;
 }
 
 TEST(SvgViewBox, WebCgmKeepsTheFullExtent)

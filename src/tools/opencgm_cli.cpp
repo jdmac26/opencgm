@@ -37,6 +37,7 @@ struct CliOptions
     bool verbose = false;
     bool quiet = false;
     bool optimize = false;
+    bool fit_to_content = false;
     bool minify = false;
     std::string profile = "s1000d";
     bool profile_set = false;
@@ -133,6 +134,8 @@ void print_usage(const char *exe)
                  "  --shim-url <url>                   Reference external viewer shim instead of inline script\n"
                  "  --quantize-png                     Reduce raster PNG color precision\n"
                  "  --no-quantize-png                  Disable PNG quantization\n"
+                 "  --fit-to-content                   Crop the viewBox to the drawing instead of the\n"
+                 "                                     whole CGM picture extent (sheet margins removed)\n"
                  "  --optimize                         Smaller output: group primitives that share\n"
                  "                                     a style, round coordinates to 1/10000 of the\n"
                  "                                     picture, drop comments and unused defs.\n"
@@ -288,6 +291,7 @@ bool apply_preset(opencgm_ctx_t *ctx, const std::string &raw_name)
     opencgm_set_text_as_path(ctx, textAsPath ? 1 : 0);
     opencgm_set_minify(ctx, flag("minifyOutput", false));
     opencgm_set_optimize_paths(ctx, flag("optimizeForWeb", false));
+    opencgm_set_fit_to_content(ctx, flag("fitToContent", false));
 
     if (s.value("strictComplianceMode", false)) {
         // Same composition the managed app uses for "strict compliance mode".
@@ -333,6 +337,10 @@ int convert_file(const CliOptions &options,
         opencgm_set_profile(ctx, options.profile.c_str());
     }
     // Only ever switch these on, so a preset that enables them keeps them.
+    if (options.fit_to_content)
+    {
+        opencgm_set_fit_to_content(ctx, 1);
+    }
     if (options.optimize)
     {
         opencgm_set_optimize_paths(ctx, 1);
@@ -844,6 +852,10 @@ int main(int argc, char **argv)
         else if (std::strcmp(arg, "--quiet") == 0)
         {
             options.quiet = true;
+        }
+        else if (std::strcmp(arg, "--fit-to-content") == 0)
+        {
+            options.fit_to_content = true;
         }
         else if (std::strcmp(arg, "--optimize") == 0)
         {

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <initializer_list>
 #include <sstream>
 #include <string>
@@ -83,15 +84,18 @@ namespace opencgm_test
         };
 
         // Expects the conversion to succeed and returns the SVG.
-        std::string convert(const char *profile = "webcgm")
+        std::string convert(const char *profile = "webcgm",
+                            const std::function<void(opencgm_ctx_t *)> &configure = {})
         {
-            Result result = run(profile);
+            Result result = run(profile, configure);
             EXPECT_EQ(result.status, OPENCGM_OK) << result.error;
             return result.svg;
         }
 
         // Converts without judging the outcome, for tests of failures.
-        Result run(const char *profile = "webcgm")
+        // configure, when given, sets further context options.
+        Result run(const char *profile = "webcgm",
+                   const std::function<void(opencgm_ctx_t *)> &configure = {})
         {
             namespace fs = std::filesystem;
             element(0, 5, {});  // END PICTURE
@@ -112,6 +116,8 @@ namespace opencgm_test
             Result result;
             opencgm_ctx_t *ctx = opencgm_create();
             opencgm_set_profile(ctx, profile);
+            if (configure)
+                configure(ctx);
             result.status = opencgm_convert_cgm_to_svg(ctx, in.string().c_str(), out.string().c_str());
             if (result.status != OPENCGM_OK)
             {
