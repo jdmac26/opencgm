@@ -50,8 +50,15 @@ extern "C" {
     // Retained for ABI compatibility. These pre-1.0 rendering controls never
     // affected SVG conversion; profile-aware coordinate handling is automatic.
     OPENCGM_API void           opencgm_set_yflip_mode(opencgm_ctx_t* ctx, int mode);
-    OPENCGM_API void           opencgm_set_fit_to_content(opencgm_ctx_t* ctx, int fit);
     OPENCGM_API void           opencgm_set_scale(opencgm_ctx_t* ctx, double scale);
+
+    // Crop the viewBox to the drawing (plus a 2% margin) instead of the full
+    // VDC extent, in every profile. Without it, only a drawing covering under
+    // 20% of the picture is fitted, and only outside the WebCGM profile. If
+    // the picture holds something whose extent cannot be measured (tiles,
+    // symbols, segment copies) the full picture is kept and the conversion
+    // report says why. Default off.
+    OPENCGM_API void           opencgm_set_fit_to_content(opencgm_ctx_t* ctx, int fit);
 
     // Pipeline
     OPENCGM_API void           opencgm_set_dpi(opencgm_ctx_t* ctx, int dpi);

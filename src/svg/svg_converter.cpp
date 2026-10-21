@@ -2173,9 +2173,9 @@ namespace opencgm
 
         // Autofit crops the viewBox to these bounds, so it must only act when
         // they cover everything that will be drawn. Any primitive whose
-        // extent is not measured here (plain TEXT, tiles, symbols, segment
-        // copies...) makes the bounds a guess, and cropping to a guess cut
-        // drawings made of DISJOINT POLYLINEs down to their title-block text.
+        // extent is not measured here (tiles, symbols, segment copies...)
+        // makes the bounds a guess, and cropping to a guess cut drawings made
+        // of DISJOINT POLYLINEs down to their title-block text.
         bool bounds_complete = true;
         auto includePoints = [&](const std::vector<CGMPoint> &points)
         {
@@ -2185,6 +2185,80 @@ namespace opencgm
             }
         };
 
+        // Text extents are estimated from the text attributes in force, which
+        // are tracked as the commands are walked: CHARACTER HEIGHT (default 1%
+        // of the extent, as in ISO 8632), TEXT ALIGNMENT, and whether the text
+        // runs rightward and upright. The estimate leans generous: it only has
+        // to keep a crop from cutting text off.
+        double text_height = 0.01 * std::max(std::abs(vdc_x2 - vdc_x1), std::abs(vdc_y2 - vdc_y1));
+        int text_h_align = 0;
+        bool text_upright_rightward = true;
+        bool text_path_right = true;
+        const double x_direction = (vdc_x2 >= vdc_x1) ? 1.0 : -1.0;
+        auto includeTextBox = [&](const CGMPoint &at, double width, double height)
+        {
+            if (!text_upright_rightward || !text_path_right)
+            {
+                // Rotated or non-rightward runs: the box in every direction.
+                const double reach = std::max(width, height);
+                updateBounds(at.x() - reach, at.y() - reach);
+                updateBounds(at.x() + reach, at.y() + reach);
+                return;
+            }
+            // NORMAL and LEFT start at the anchor, CENTRE straddles it, RIGHT ends there.
+            const double start = text_h_align == 2 ? -width / 2.0 : text_h_align == 3 ? -width : 0.0;
+            updateBounds(at.x() + x_direction * start, at.y() - 1.2 * height);
+            updateBounds(at.x() + x_direction * (start + width), at.y() + 1.2 * height);
+        };
+
+        // Whatever is drawn in the background colour is invisible and must not
+        // decide the drawing's extent: authoring tools commonly put a
+        // background-coloured frame round the whole sheet, which made a fit
+        // keep every margin. Colours are compared as encoded, like the
+        // background they are compared with; index 0 is the background colour
+        // and 1 black until a COLOUR TABLE says otherwise (ISO 8632 defaults).
+        const Color black(0, 0, 0);
+        std::map<int, Color> palette{{0, background_color_}, {1, black}};
+        auto resolve = [&](const CGMColor &c) -> Color
+        {
+            if (!c.isIndexed())
+                return c.color();
+            const auto it = palette.find(c.colorIndex());
+            return it != palette.end() ? it->second : black;
+        };
+        auto isBackground = [&](const Color &c)
+        {
+            return c.r == background_color_.r && c.g == background_color_.g && c.b == background_color_.b;
+        };
+        Color line_colour = black, marker_colour = black, text_colour = black, fill_colour = black, edge_colour = black;
+        int interior_style = 0;
+        bool edge_visible = false;
+        auto drawsSomething = [&](int elementId) -> bool
+        {
+            switch (elementId)
+            {
+            case 3:
+                return !isBackground(marker_colour);
+            case 4: case 5: case 6:
+                return !isBackground(text_colour);
+            case 7: case 8: case 11: case 12: case 14: case 16: case 17: case 19:
+            {
+                const bool filled = interior_style != 0 && interior_style != 4 && !isBackground(fill_colour);
+                const bool edged = (edge_visible || interior_style == 0) && !isBackground(edge_colour);
+                return filled || edged;
+            }
+            case 9: case 10:
+                return true;  // cell arrays and GDPs carry their own content
+            default:
+                return !isBackground(line_colour);
+            }
+        };
+
+        // A tile array is placed by BEGIN TILE ARRAY. The line progression is
+        // counted to both sides of the path, which can only loosen a fit.
+        bool in_tile_array = false;
+        bool tile_array_measured = false;
+
         for (const auto &cmd : cgm_file_->commands())
         {
             if (cmd->elementClass() == ClassCode::SegmentControlandSegmentAttributeElements &&
@@ -2193,12 +2267,85 @@ namespace opencgm
                 bounds_complete = false;
                 continue;
             }
+            if (cmd->elementClass() == ClassCode::DelimiterElement && cmd->elementId() == 20)
+            {
+                in_tile_array = false;  // END TILE ARRAY
+                continue;
+            }
+            if (auto *tiles = metricsCast<BeginTileArray, ClassCode::DelimiterElement, 19>(cmd.get()))
+            {
+                in_tile_array = true;
+                const double pathLength = std::abs(tiles->cellSizeInPathDirection()) *
+                                          std::max(1, tiles->nTilesInPathDirection()) *
+                                          std::max(1, tiles->nCellsPerTileInPathDirection());
+                const double lineLength = std::abs(tiles->cellSizeInLineDirection()) *
+                                          std::max(1, tiles->nTilesInLineDirection()) *
+                                          std::max(1, tiles->nCellsPerTileInLineDirection());
+                tile_array_measured = pathLength > 0.0 && lineLength > 0.0;
+                if (tile_array_measured)
+                {
+                    const int quarter = ((tiles->cellPathDirection() % 4) + 4) % 4;
+                    const CGMPoint path = quarter == 0 ? CGMPoint(1, 0) : quarter == 1 ? CGMPoint(0, 1)
+                                        : quarter == 2 ? CGMPoint(-1, 0) : CGMPoint(0, -1);
+                    const CGMPoint across(-path.y(), path.x());
+                    const CGMPoint &at = tiles->position();
+                    for (const double along : {0.0, pathLength})
+                        for (const double side : {-lineLength, 0.0, lineLength})
+                            updateBounds(at.x() + path.x() * along + across.x() * side,
+                                         at.y() + path.y() * along + across.y() * side);
+                }
+                else
+                {
+                    bounds_complete = false;
+                }
+                continue;
+            }
+            if (cmd->elementClass() == ClassCode::AttributeElements)
+            {
+                if (auto *colour = metricsCast<LineColour, ClassCode::AttributeElements, 4>(cmd.get()))
+                    line_colour = resolve(colour->color());
+                else if (auto *marker = metricsCast<MarkerColour, ClassCode::AttributeElements, 8>(cmd.get()))
+                    marker_colour = resolve(marker->color());
+                else if (auto *textColour = metricsCast<TextColour, ClassCode::AttributeElements, 14>(cmd.get()))
+                    text_colour = resolve(textColour->color());
+                else if (auto *fill = metricsCast<FillColour, ClassCode::AttributeElements, 23>(cmd.get()))
+                    fill_colour = resolve(fill->color());
+                else if (auto *edge = metricsCast<EdgeColour, ClassCode::AttributeElements, 29>(cmd.get()))
+                    edge_colour = resolve(edge->color());
+                else if (auto *style = metricsCast<InteriorStyle, ClassCode::AttributeElements, 22>(cmd.get()))
+                    interior_style = static_cast<int>(style->style());
+                else if (auto *visibility = metricsCast<EdgeVisibility, ClassCode::AttributeElements, 30>(cmd.get()))
+                    edge_visible = visibility->isVisible();
+                else if (auto *table = metricsCast<ColourTable, ClassCode::AttributeElements, 34>(cmd.get()))
+                {
+                    for (size_t i = 0; i < table->colors().size(); ++i)
+                        palette[table->startIndex() + static_cast<int>(i)] = table->colors()[i];
+                }
+                else if (auto *height = metricsCast<CharacterHeight, ClassCode::AttributeElements, 15>(cmd.get()))
+                    text_height = std::abs(height->height());
+                else if (auto *orientation = metricsCast<CharacterOrientation, ClassCode::AttributeElements, 16>(cmd.get()))
+                    text_upright_rightward = orientation->xUp().x() == 0.0 && orientation->xUp().y() > 0.0 &&
+                                             orientation->yUp().y() == 0.0 && orientation->yUp().x() > 0.0;
+                else if (auto *alignment = metricsCast<TextAlignment, ClassCode::AttributeElements, 18>(cmd.get()))
+                    text_h_align = alignment->horizontalAlignment();
+                else if (auto *path = dynamic_cast<TextPath *>(cmd.get()))
+                    text_path_right = path->path() == TextPathType::RIGHT;
+                continue;
+            }
             if (cmd->elementClass() != ClassCode::GraphicalPrimitiveElements)
             {
                 continue;
             }
 
             const int elementId = cmd->elementId();
+            if (in_tile_array && tile_array_measured)
+            {
+                continue;  // the array's extent is already counted
+            }
+            if (!drawsSomething(elementId))
+            {
+                continue;
+            }
             switch (elementId)
             {
             case 2: // Disjoint Polyline
@@ -2362,10 +2509,10 @@ namespace opencgm
                 auto *text = metricsCast<Text, ClassCode::GraphicalPrimitiveElements, 4>(cmd.get());
                 if (text)
                 {
-                    updateBounds(text->position().x(), text->position().y());
+                    // About 0.6 em per character for proportional faces.
+                    const double width = 0.6 * text_height * static_cast<double>(text->text().size());
+                    includeTextBox(text->position(), width, text_height);
                 }
-                // Its extent depends on attributes and fonts not known here.
-                bounds_complete = false;
                 break;
             }
             case 5: // Restricted Text
@@ -2373,12 +2520,9 @@ namespace opencgm
                 auto *restricted = metricsCast<RestrictedText, ClassCode::GraphicalPrimitiveElements, 5>(cmd.get());
                 if (restricted)
                 {
-                    // The run fits its box, whose orientation and alignment
-                    // are not known here: count the box in every direction.
-                    const CGMPoint &at = restricted->position();
-                    const double reach = std::max(std::abs(restricted->deltaWidth()), std::abs(restricted->deltaHeight()));
-                    updateBounds(at.x() - reach, at.y() - reach);
-                    updateBounds(at.x() + reach, at.y() + reach);
+                    // The run is fitted to its box.
+                    includeTextBox(restricted->position(),
+                                   std::abs(restricted->deltaWidth()), std::abs(restricted->deltaHeight()));
                 }
                 break;
             }
@@ -2736,12 +2880,36 @@ namespace opencgm
             }
         }
 
+        // Explicit fit-to-content: crop to the drawing whatever its coverage,
+        // in every profile, with a margin of 2% of its larger side. A sheet
+        // whose drawing covers half the page otherwise opens in a browser as a
+        // small drawing in a sea of white. A viewcontext the file asks to be
+        // adopted still takes precedence.
+        if (fit_to_content_ && has_points && !apply_view_context_on_load_)
+        {
+            if (bounds_complete)
+            {
+                fit_to_geometry = true;
+                const double margin = std::max(geometry_width, geometry_height) * 0.02;
+                fit_margin_x = margin;
+                fit_margin_y = margin;
+            }
+            else if (!fit_to_content_skip_reported_)
+            {
+                fit_to_content_skip_reported_ = true;
+                reportDegradation("fit-to-content skipped: the picture contains elements whose extent cannot be"
+                                  " measured (tiles, symbols or segment copies), so the full picture is kept");
+            }
+        }
+
         if (fit_to_geometry)
         {
-            picture_vdc_min_x_ = bounds_x1 - fit_margin_x;
-            picture_vdc_max_x_ = bounds_x2 + fit_margin_x;
-            picture_vdc_min_y_ = bounds_y1 - fit_margin_y;
-            picture_vdc_max_y_ = bounds_y2 + fit_margin_y;
+            // Never larger than the picture: a drawing reaching the sheet
+            // edge plus a margin would otherwise grow the viewBox past it.
+            picture_vdc_min_x_ = std::max(bounds_x1 - fit_margin_x, picture_min_x);
+            picture_vdc_max_x_ = std::min(bounds_x2 + fit_margin_x, picture_max_x);
+            picture_vdc_min_y_ = std::max(bounds_y1 - fit_margin_y, picture_min_y);
+            picture_vdc_max_y_ = std::min(bounds_y2 + fit_margin_y, picture_max_y);
             picture_vdc_width_ = std::abs(picture_vdc_max_x_ - picture_vdc_min_x_);
             picture_vdc_height_ = std::abs(picture_vdc_max_y_ - picture_vdc_min_y_);
 

@@ -1006,6 +1006,14 @@ public:
      * output. Clamped to [0.001, 10]; default 0.5.
      */
     void setNurbsToleranceSvgUnits(double svgUnits);
+    // Crop the viewBox to the drawing (plus a 2% margin) in every profile,
+    // rather than only when it covers under 20% of the picture.
+    void setFitToContent(bool enabled) {
+        if (fit_to_content_ != enabled) {
+            fit_to_content_ = enabled;
+            document_metrics_dirty_ = true;
+        }
+    }
     void setAdoptViewOnLoad(bool enabled) {
         if (pending_conversion_plan_.adopt_view_on_load != enabled) {
             pending_conversion_plan_.adopt_view_on_load = enabled;
@@ -1682,6 +1690,8 @@ private:
     // primitive in a metafile, and a line per shape would bury the fact rather than report it.
     std::set<int> unsupported_fill_styles_warned_;
     std::vector<std::string> degradations_;
+    bool fit_to_content_ = false;
+    bool fit_to_content_skip_reported_ = false;
     bool pattern_fallback_warning_emitted_ = false;
     bool hatch_fallback_warning_emitted_ = false;
     mutable bool font_substitutions_cache_dirty_ = true;
