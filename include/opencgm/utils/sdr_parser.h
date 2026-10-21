@@ -7,6 +7,8 @@
 #include <optional>
 #include <cstdint>
 
+#include "opencgm/enums.h"
+
 namespace opencgm {
 
 /**
@@ -46,6 +48,39 @@ public:
      * @return Rectangle coordinates if parsing succeeds
      */
     static std::optional<ViewContextRect> parseViewContextRect(const std::string& binaryData);
+
+    /**
+     * How the metafile encodes the numbers an SDR member can hold. VDC
+     * members follow the file's VDC TYPE and precision, so a region in an
+     * integer-VDC metafile holds integers, not floats. The defaults are the
+     * old fixed assumption: IEEE single VDC, 16-bit integers and indexes.
+     */
+    struct NumberFormat {
+        bool vdcInteger = false;
+        int vdcIntegerBits = 16;
+        Precision vdcReal = Precision::Floating_32;
+        int integerBits = 16;
+        int indexBits = 16;
+        Precision real = Precision::Floating_32;
+    };
+
+    /** WebCGM region shapes, the first member of a region SDR. */
+    enum class RegionType { Rectangle = 1, Ellipse = 2, Polygon = 3, PolyBezier = 4 };
+
+    struct Region {
+        RegionType type = RegionType::Polygon;
+        std::vector<std::pair<double, double>> points;  // VDC, as encoded
+    };
+
+    /**
+     * Decode a region SDR member by member: the region type, then its points
+     * in the file's VDC format. std::nullopt if the record is not one.
+     */
+    static std::optional<Region> parseRegion(const std::string& binaryData, const NumberFormat& format);
+
+    /** A viewcontext SDR: one VDC member holding minX, minY, maxX, maxY. */
+    static std::optional<ViewContextRect> parseViewContextRect(const std::string& binaryData,
+                                                               const NumberFormat& format);
 
     /**
      * Decode a structured text record that may contain UTF-16 big or little endian data
